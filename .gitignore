@@ -1,0 +1,24 @@
+# Backend secrets & environment
+backend/.env
+backend/venv/
+backend/__pycache__/
+backend/*.pyc
+backend/data/
+
+# Frontend secrets & environment
+frontend/.env.local
+frontend/.env*.local
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+
+# Docker
+*.log
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
