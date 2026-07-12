@@ -1,0 +1,15 @@
+version: '3.8'
+services:
+  mysql-test:
+    image: mysql:8
+    container_name: quera-mysql-test
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: quera_test
+      MYSQL_USER: quera_user
+      MYSQL_PASSWORD: querapassword
+    ports:
+      - "3307:3306"
+    volumes:
+      - ./mysql-init:/docker-entrypoint-initdb.d
+    restart: unless-stopped

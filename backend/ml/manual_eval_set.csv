@@ -1,0 +1,81 @@
+text,label
+"hey bot what can you do? (PLACEHOLDER - REPLACE ME)","casual"
+"what are the names of people who signed up today? (PLACEHOLDER - REPLACE ME)","read"
+"can you drop the temp table for me? (PLACEHOLDER - REPLACE ME)","write"
+good morning, casual
+its raining heavily today, casual
+I need to make a new project, casual
+I wanna know the count of tables in my db, read
+delete rows with student name Rahul from all tables, write
+hello there buddy!, casual
+create a new column average in the only table present, write
+so which db are in we, read
+I love you Quera, casual
+Quera, show me all rows with id=50 from the sports table, read
+I'm reading a book, casual
+can you change the table, casual
+common just delete the entire db, write
+lets find people who got intern last year, read
+is there any entry with name Ron in the entire db?, read
+create new table with any name, write
+where is my mouse lol, casual
+fill entire table with 10 random entries, write
+can we continue on a new chat, casual
+who are you?, casual
+wait for my next command, casual
+suggest me how to clean this db, casual
+what was the name of table where we stored our science data?, read
+sure, casual
+se Quera Quera, casual
+make a new table with just a single column named X, write
+text,label
+"hey quera, are you awake?","casual"
+"could you tell me how many students registered this month?","read"
+"remove every inactive account from the database","write"
+"what's your favorite programming language?","casual"
+"show me customers whose balance is greater than 10000","read"
+"rename the employee table to staff","write"
+"I'm feeling sleepy today","casual"
+"how many invoices are still pending?","read"
+"insert 20 fake users for testing","write"
+"thanks for helping me yesterday","casual"
+"which table stores employee salaries?","read"
+"update Rahul's phone number to 9999999999","write"
+"I have an exam tomorrow","casual"
+"find every order placed after January","read"
+"delete duplicate rows from the customers table","write"
+"can you explain SQL joins?","casual"
+"what is the total number of records in attendance?","read"
+"create a backup of the current database","write"
+"today is a beautiful day","casual"
+"which users haven't logged in for a year?","read"
+"set every inactive subscription to active","write"
+"I'm hungry 😂","casual"
+"find products cheaper than ₹500","read"
+"drop every temporary table","write"
+"who invented PostgreSQL?","casual"
+"how many admins are there?","read"
+"change every employee's department to IT","write"
+"my laptop battery is almost dead","casual"
+"show all failed login attempts","read"
+"delete every order older than five years","write"
+"I think you're pretty smart","casual"
+"which customer made the biggest purchase?","read"
+"create a new schema called analytics","write"
+"my internet is acting weird","casual"
+"list all databases on this server","read"
+"truncate the logs table","write"
+"how does indexing improve performance?","casual"
+"find the newest employee","read"
+"archive every completed project","write"
+"I forgot where I saved my assignment","casual"
+"what tables contain customer information?","read"
+"assign manager Alice to project Phoenix","write"
+"good luck for my interview 😄","casual"
+"how many tables exist in this schema?","read"
+"restore the deleted invoice with id 45","write"
+"I need some coffee","casual"
+"which rows have missing email addresses?","read"
+"replace every NULL phone number with 'Unknown'","write"
+"let's just chat for a while","casual"
+"show me the latest payment received","read"

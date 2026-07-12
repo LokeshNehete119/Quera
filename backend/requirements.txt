@@ -5,3 +5,8 @@ python-dotenv
 google-genai
 supabase
 cryptography
+scikit-learn
+joblib
+pandas
+sqlglot
+PyMySQL

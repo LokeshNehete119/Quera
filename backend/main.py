@@ -9,10 +9,16 @@ import os
 import json
 import re
 import time
+import datetime
 import sys
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 from cryptography.fernet import Fernet
+import joblib
+import pymysql
+from urllib.parse import urlparse
+import sqlglot
+from sqlglot import exp
 
 from google import genai
 from google.genai import types
@@ -37,8 +43,20 @@ def encrypt_conn(conn_str: str) -> str:
 def decrypt_conn(enc_str: str) -> str:
     return cipher_suite.decrypt(enc_str.encode('utf-8')).decode('utf-8')
 
+# Global variable for the ML intent classifier
+ml_classifier = None
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global ml_classifier
+    model_path = os.path.join(os.path.dirname(__file__), "ml", "classifier.joblib")
+    try:
+        ml_classifier = joblib.load(model_path)
+        print(f"Successfully loaded ML classifier from {model_path}")
+    except Exception as e:
+        print(f"CRITICAL ERROR: Failed to load ML classifier from {model_path}: {e}", file=sys.stderr)
+        sys.exit(1)
+        
     app_db_url = os.environ.get("APP_DB_URL")
     if not app_db_url:
         print("CRITICAL ERROR: APP_DB_URL environment variable is missing. Failed to start.", file=sys.stderr)
@@ -63,6 +81,7 @@ async def lifespan(app: FastAPI):
                 action_id TEXT,
                 summary TEXT,
                 is_destructive BOOLEAN,
+                data_json JSONB,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
             );
             """)
@@ -75,6 +94,17 @@ async def lifespan(app: FastAPI):
                 IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='chats' AND column_name='user_id') THEN
                     TRUNCATE chats CASCADE;
                     ALTER TABLE chats ADD COLUMN user_id UUID NOT NULL;
+                END IF;
+            END
+            $$;
+            """)
+            
+            # Phase 12: Add data_json column for tabular data
+            cur.execute("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='messages' AND column_name='data_json') THEN
+                    ALTER TABLE messages ADD COLUMN data_json JSONB;
                 END IF;
             END
             $$;
@@ -168,21 +198,21 @@ def get_app_db_conn_rls(user_id: str):
         cur.execute("SET LOCAL request.jwt.claims = %s;", (claim_json,))
     return conn
 
-def get_active_db_connection_string(session_id: str, user_id: str) -> str:
+def get_active_db_connection_string(session_id: str, user_id: str):
     if session_id not in sessions:
         raise HTTPException(status_code=401, detail="Active database session required. Please reconnect.")
         
     conn_id = sessions[session_id]
     app_conn = get_app_db_conn_rls(user_id)
     with app_conn.cursor() as cur:
-        cur.execute("SELECT encrypted_connection_string FROM db_connections WHERE id = %s AND user_id = %s", (conn_id, user_id))
+        cur.execute("SELECT encrypted_connection_string, db_type FROM db_connections WHERE id = %s AND user_id = %s", (conn_id, user_id))
         row = cur.fetchone()
     app_conn.close()
     
     if not row:
         raise HTTPException(status_code=404, detail="Selected database connection no longer exists.")
         
-    return decrypt_conn(row[0])
+    return decrypt_conn(row[0]), row[1]
 
 class ConnectionRequest(BaseModel):
     connection_string: str
@@ -231,23 +261,32 @@ def cancel_chat(req: CancelRequest, user_id: str = Depends(get_current_user)):
     cancelled_messages.add(req.message_id)
     return {"success": True}
 
-def save_message(conn, chat_id, role, content, sql=None, action_id=None, summary=None, is_destructive=None):
+def save_message(conn, chat_id, role, content, sql=None, action_id=None, summary=None, is_destructive=None, data_json=None):
     with conn.cursor() as cur:
         cur.execute("""
-            INSERT INTO messages (chat_id, role, content, sql, action_id, summary, is_destructive)
-            VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id;
-        """, (chat_id, role, content, sql, action_id, summary, is_destructive))
+            INSERT INTO messages (chat_id, role, content, sql, action_id, summary, is_destructive, data_json)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id;
+        """, (chat_id, role, content, sql, action_id, summary, is_destructive, json.dumps(data_json) if data_json else None))
         msg_id = cur.fetchone()[0]
         cur.execute("UPDATE chats SET updated_at = NOW() WHERE id = %s", (chat_id,))
     conn.commit()
     return msg_id
 
-def check_and_save_message(frontend_msg_id, conn, chat_id, role, content, sql=None, action_id=None, summary=None, is_destructive=None):
+def check_and_save_message(frontend_msg_id, conn, chat_id, role, content, sql=None, action_id=None, summary=None, is_destructive=None, data_json=None):
     if frontend_msg_id and frontend_msg_id in cancelled_messages:
         cancelled_messages.remove(frontend_msg_id)
         print(f"[AUDIT] Dropped saving response for cancelled frontend_msg_id: {frontend_msg_id}")
         return None
-    return save_message(conn, chat_id, role, content, sql, action_id, summary, is_destructive)
+    return save_message(conn, chat_id, role, content, sql, action_id, summary, is_destructive, data_json)
+
+def serialize_for_json(obj):
+    if isinstance(obj, (datetime.date, datetime.datetime)):
+        return obj.isoformat()
+    if isinstance(obj, uuid.UUID):
+        return str(obj)
+    if hasattr(obj, '__class__') and obj.__class__.__name__ == 'Decimal':
+        return float(obj)
+    return obj
 
 def cleanup_old_db(conn):
     try:
@@ -259,22 +298,43 @@ def cleanup_old_db(conn):
         conn.rollback()
         print(f"Note: Could not drop old app_ tables (might not exist or no permission): {e}")
 
-def get_db_schema(conn) -> str:
-    schema_query = """
-        SELECT table_name, column_name, data_type
-        FROM information_schema.columns
-        WHERE table_schema = 'public'
-        ORDER BY table_name, ordinal_position;
-    """
-    with conn.cursor() as cur:
-        cur.execute(schema_query)
-        rows = cur.fetchall()
+def get_db_schema(conn, db_type: str) -> str:
+    if db_type == "postgres":
+        schema_query = """
+            SELECT table_name, column_name, data_type
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+            ORDER BY table_name, ordinal_position;
+        """
+    elif db_type == "mysql":
+        schema_query = """
+            SELECT table_name, column_name, data_type
+            FROM information_schema.columns
+            WHERE table_schema = DATABASE()
+            ORDER BY table_name, ordinal_position;
+        """
+    else:
+        return ""
+
+    rows = []
+    for _ in range(3):
+        with conn.cursor() as cur:
+            cur.execute(schema_query)
+            rows = cur.fetchall()
+        if rows:
+            break
+        time.sleep(0.5)
     
     tables = {}
-    for table_name, column_name, data_type in rows:
-        if table_name not in tables:
-            tables[table_name] = []
-        tables[table_name].append(f"{column_name} ({data_type})")
+    for row in rows:
+        if isinstance(row, dict):
+            t_name, c_name, d_type = list(row.values())
+        else:
+            t_name, c_name, d_type = row
+            
+        if t_name not in tables:
+            tables[t_name] = []
+        tables[t_name].append(f"{c_name} ({d_type})")
         
     schema_str = ""
     for table, columns in tables.items():
@@ -282,36 +342,100 @@ def get_db_schema(conn) -> str:
         
     return schema_str
 
-def is_safe_select_query(query: str) -> bool:
-    if not query.strip().upper().startswith("SELECT"):
+def is_safe_select_query(query: str, db_type: str = "postgres") -> bool:
+    try:
+        parsed = sqlglot.parse(query, read=db_type)
+    except Exception:
         return False
-    dangerous_keywords = [
-        "INSERT", "UPDATE", "DELETE", "DROP", "ALTER", 
-        "TRUNCATE", "CREATE", "GRANT", "REVOKE", "EXECUTE",
-        "COMMIT", "ROLLBACK", "MERGE", "REPLACE"
-    ]
-    for kw in dangerous_keywords:
-        if re.search(rf'\b{kw}\b', query, re.IGNORECASE):
-            return False
+        
+    if len(parsed) != 1 or parsed[0] is None:
+        return False
+        
+    stmt = parsed[0]
+    if not isinstance(stmt, exp.Select):
+        return False
+        
+    # Writable CTE / Nested Statement Check
+    # Walk the tree and look for any destructive nodes, even if nested in CTEs
+    destructive_nodes = list(stmt.find_all(
+        exp.Insert, exp.Update, exp.Delete, exp.Drop, exp.Create, exp.Alter, exp.Command, exp.TruncateTable
+    ))
+    if destructive_nodes:
+        return False
+        
     return True
 
-def is_highly_destructive(sql: str) -> bool:
-    upper_sql = sql.upper()
-    if "DROP TABLE" in upper_sql or "TRUNCATE" in upper_sql:
+# Known limitation: tautological WHERE clauses (e.g. WHERE 1=1) are not detected as
+# destructive, since this requires evaluating logical equivalence of arbitrary
+# expressions, which is out of scope for this pass. WHERE-clause presence is
+# checked syntactically, not semantically.
+def is_highly_destructive(sql: str, db_type: str = "postgres") -> bool:
+    try:
+        parsed = sqlglot.parse(sql, read=db_type)
+    except Exception:
+        # Fail closed on parse errors
         return True
-    if "DELETE FROM" in upper_sql and "WHERE" not in upper_sql:
+        
+    # Multi-statement check: a generated write action should never be a stacked query
+    if len(parsed) > 1:
         return True
+        
+    if not parsed or parsed[0] is None:
+        return True
+        
+    stmt = parsed[0]
+    
+    if isinstance(stmt, (exp.Drop, exp.TruncateTable)):
+        print(f"[SQL PARSER] AST type: {type(stmt).__name__}, Destructive: True")
+        return True
+        
+    if isinstance(stmt, (exp.Delete, exp.Update)):
+        if stmt.args.get("where") is None:
+            print(f"[SQL PARSER] AST type: {type(stmt).__name__}, Destructive: True (no WHERE)")
+            return True
+            
+    print(f"[SQL PARSER] AST type: {type(stmt).__name__}, Destructive: False")
     return False
 
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
 
+def detect_db_type(connection_string: str) -> str:
+    if connection_string.startswith("postgres://") or connection_string.startswith("postgresql://"):
+        return "postgres"
+    if connection_string.startswith("mysql://") or connection_string.startswith("mysql+pymysql://"):
+        return "mysql"
+    raise ValueError("Unrecognized or unsupported connection string scheme.")
+
+def get_db_connection(connection_string: str, db_type: str):
+    if db_type == "postgres":
+        return psycopg2.connect(connection_string)
+    elif db_type == "mysql":
+        parsed = urlparse(connection_string)
+        port = parsed.port if parsed.port else 3306
+        return pymysql.connect(
+            host=parsed.hostname,
+            port=port,
+            user=parsed.username,
+            password=parsed.password,
+            database=parsed.path.lstrip('/'),
+            cursorclass=pymysql.cursors.DictCursor
+        )
+    else:
+        raise ValueError("Unsupported database type")
+
 @app.post("/db/test-connection")
 def test_db_connection(req: ConnectionRequest, user_id: str = Depends(get_current_user)):
     try:
-        conn = psycopg2.connect(req.connection_string)
-        cleanup_old_db(conn) # Cleanup old internal tables from user DB
+        db_type = detect_db_type(req.connection_string)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+        
+    try:
+        conn = get_db_connection(req.connection_string, db_type)
+        if db_type == "postgres":
+            cleanup_old_db(conn) # Cleanup old internal tables from user DB
         conn.close()
         return {"success": True, "message": "Connection successful"}
     except Exception as e:
@@ -321,7 +445,7 @@ def test_db_connection(req: ConnectionRequest, user_id: str = Depends(get_curren
 def list_db_connections(user_id: str = Depends(get_current_user)):
     conn = get_app_db_conn_rls(user_id)
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
-        cur.execute("SELECT id, name, created_at FROM db_connections WHERE user_id = %s ORDER BY created_at DESC", (user_id,))
+        cur.execute("SELECT id, name, db_type, created_at FROM db_connections WHERE user_id = %s ORDER BY created_at DESC", (user_id,))
         connections = cur.fetchall()
     conn.close()
     return connections
@@ -329,9 +453,15 @@ def list_db_connections(user_id: str = Depends(get_current_user)):
 @app.post("/db/connections")
 def create_db_connection(req: CreateDbConnectionReq, user_id: str = Depends(get_current_user)):
     try:
+        db_type = detect_db_type(req.connection_string)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+        
+    try:
         # Test it first
-        test_conn = psycopg2.connect(req.connection_string)
-        cleanup_old_db(test_conn)
+        test_conn = get_db_connection(req.connection_string, db_type)
+        if db_type == "postgres":
+            cleanup_old_db(test_conn)
         test_conn.close()
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Connection failed: {str(e)}")
@@ -340,8 +470,8 @@ def create_db_connection(req: CreateDbConnectionReq, user_id: str = Depends(get_
     conn = get_app_db_conn_rls(user_id)
     with conn.cursor() as cur:
         cur.execute(
-            "INSERT INTO db_connections (user_id, name, encrypted_connection_string) VALUES (%s, %s, %s) RETURNING id",
-            (user_id, req.name, encrypted)
+            "INSERT INTO db_connections (user_id, name, encrypted_connection_string, db_type) VALUES (%s, %s, %s, %s) RETURNING id",
+            (user_id, req.name, encrypted, db_type)
         )
         new_id = cur.fetchone()[0]
     conn.commit()
@@ -435,7 +565,7 @@ def get_chat_messages(chat_id: str, request: Request, user_id: str = Depends(get
     conn = get_app_db_conn_rls(user_id)
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute("""
-            SELECT m.id, m.role, m.content, m.sql, m.action_id, m.summary, m.is_destructive, m.created_at 
+            SELECT m.id, m.role, m.content, m.sql, m.action_id, m.summary, m.is_destructive, m.data_json, m.created_at 
             FROM messages m
             JOIN chats c ON m.chat_id = c.id
             WHERE m.chat_id = %s AND c.user_id = %s AND (c.db_connection_id = %s OR c.db_connection_id IS NULL)
@@ -477,8 +607,8 @@ def chat_endpoint(req: ChatMessageRequest, request: Request, user_id: str = Depe
 
     app_conn = get_app_db_conn_rls(user_id)
     
-    conn_string = get_active_db_connection_string(session_id, user_id)
-    user_conn = psycopg2.connect(conn_string)
+    conn_string, db_type = get_active_db_connection_string(session_id, user_id)
+    user_conn = get_db_connection(conn_string, db_type)
     
     chat_id = req.chat_id
     if not chat_id:
@@ -502,44 +632,52 @@ def chat_endpoint(req: ChatMessageRequest, request: Request, user_id: str = Depe
     try:
         client = genai.Client(api_key=api_key)
         
-        sys_instruct = """You are an AI database assistant. Classify the user's intent into exactly one of three categories: 'casual', 'read', or 'write'.
-- 'casual': greetings, small talk, general questions not about the database. For this, provide a natural response in 'reply'.
-- 'read': asking to view, count, query, or select existing data. For this, return exactly '[Detected: READ request]' as 'reply'.
-- 'write': asking to create, alter, drop tables, or insert, update, delete data. For this, return exactly '[Detected: WRITE request]' as 'reply'."""
-
+        # Local ML Classification
         t0 = time.time()
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=req.message,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema=ChatResponse,
-                system_instruction=sys_instruct,
-                temperature=0.0
-            ),
-        )
+        predicted_labels = ml_classifier.predict([req.message])
+        category = predicted_labels[0]
         t1 = time.time()
-        print(f"[TIMING] Gemini API call (Classification) took {t1 - t0:.2f} seconds")
         
-        chat_res = json.loads(response.text)
-        category = chat_res.get("category")
+        print(f"[TIMING] Local ML Classification took {t1 - t0:.4f} seconds")
+        print(f"[INTENT CLASSIFIER] Message: '{req.message}' -> Predicted Category: {category} (Source: Local ML)")
         
         if category == "casual":
-            check_and_save_message(req.frontend_msg_id, app_conn, chat_id, 'ai', chat_res.get("reply", ""))
-            chat_res["chat_id"] = chat_id
+            casual_prompt = f"The user said: {req.message}\nProvide a friendly, conversational reply as an AI assistant."
+            response = client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=casual_prompt,
+                config=types.GenerateContentConfig(temperature=0.7),
+            )
+            reply = response.text.strip()
+            chat_res = {"category": "casual", "reply": reply, "chat_id": chat_id}
+            
+            check_and_save_message(req.frontend_msg_id, app_conn, chat_id, 'ai', reply)
             app_conn.close()
             user_conn.close()
             return chat_res
             
-        schema_str = get_db_schema(user_conn)
+        schema_str = get_db_schema(user_conn, db_type)
             
         if category == "read":
-            sql_instruct = f"""You are an expert SQL generator for a PostgreSQL database.
+            if db_type == "postgres":
+                sql_instruct = f"""You are an expert SQL generator for a PostgreSQL database.
 Here is the database schema:
 {schema_str}
 
 Generate a single valid SELECT query that answers the user's question. 
-If the question is completely unrelated to the schema or asks for columns/tables that do not exist, generate exactly: SELECT 'IMPOSSIBLE' AS STATUS;"""
+You may query the tables listed in the schema, or standard PostgreSQL system catalogs (like information_schema) if the user asks metadata questions about the database itself.
+If the question is completely unrelated to databases or the schema, generate exactly: SELECT 'IMPOSSIBLE' AS STATUS;"""
+            elif db_type == "mysql":
+                sql_instruct = f"""You are an expert SQL generator for a MySQL database.
+Here is the database schema:
+{schema_str}
+
+Generate a single valid SELECT query that answers the user's question. 
+CRITICAL MYSQL RULES:
+- Quote string literals with single quotes ('). Do not use double quotes.
+- Quote identifiers (tables/columns) with backticks (`), NOT double quotes.
+- Do not use PostgreSQL-specific syntax or functions.
+If the question is completely unrelated to databases or the schema, generate exactly: SELECT 'IMPOSSIBLE' AS STATUS;"""
             
             t0 = time.time()
             sql_response = client.models.generate_content(
@@ -565,7 +703,7 @@ If the question is completely unrelated to the schema or asks for columns/tables
                 user_conn.close()
                 return {"category": "read", "reply": reply, "sql": None, "chat_id": chat_id}
                 
-            if not is_safe_select_query(raw_sql):
+            if not is_safe_select_query(raw_sql, db_type):
                 reply = "Security Error: The generated query contained unsafe keywords or attempted to modify data. Only SELECT is allowed."
                 check_and_save_message(req.frontend_msg_id, app_conn, chat_id, 'ai', reply, sql=raw_sql)
                 app_conn.close()
@@ -577,12 +715,32 @@ If the question is completely unrelated to the schema or asks for columns/tables
                 results = cur.fetchall()
                 columns = [desc[0] for desc in cur.description] if cur.description else []
             
+            data_json = None
+            if len(results) > 1 or len(columns) > 1:
+                truncated = len(results) > 50
+                results_for_data = results[:50]
+                
+                serialized_rows = []
+                for row in results_for_data:
+                    # Safely handle both standard tuples (psycopg2 default) and dictionaries (pymysql DictCursor)
+                    if isinstance(row, dict):
+                        serialized_rows.append([serialize_for_json(val) for val in row.values()])
+                    else:
+                        serialized_rows.append([serialize_for_json(val) for val in row])
+                
+                data_json = {
+                    "columns": columns,
+                    "rows": serialized_rows,
+                    "truncated": truncated
+                }
+            
             if len(results) > 100:
                  results = results[:100]
                  results.append("... (results truncated to 100 rows)")
                  
             nl_instruct = """You are an AI database assistant. You just ran a SQL query to answer the user's question.
-Given the original question, the executed SQL, the column names, and the raw results, provide a clear, concise, natural-language answer to the user. Do not explain the SQL, just answer the question."""
+Given the original question, the executed SQL, the column names, and the raw results, provide a clear, concise, natural-language answer to the user. Do not explain the SQL, just answer the question.
+CRITICAL: If the results contain multiple rows, do NOT generate a markdown table or list them out. The application will render a data table separately. Instead, just provide a short single-sentence summary like 'I found X matching records.' or 'Here are the results you requested.' For single-value results (like COUNT or SUM), answer naturally in a sentence."""
             
             nl_prompt = f"User Question: {req.message}\nSQL Query: {raw_sql}\nColumns: {columns}\nResults: {results}"
             t0 = time.time()
@@ -598,18 +756,32 @@ Given the original question, the executed SQL, the column names, and the raw res
             print(f"[TIMING] Gemini API call (Read NL formatting) took {t1 - t0:.2f} seconds")
             
             reply = nl_response.text.strip()
-            check_and_save_message(req.frontend_msg_id, app_conn, chat_id, 'ai', reply, sql=raw_sql)
+            check_and_save_message(req.frontend_msg_id, app_conn, chat_id, 'ai', reply, sql=raw_sql, data_json=data_json)
             app_conn.close()
             user_conn.close()
-            return {"category": "read", "reply": reply, "sql": raw_sql, "chat_id": chat_id}
+            return {"category": "read", "reply": reply, "sql": raw_sql, "chat_id": chat_id, "data_json": data_json}
 
         elif category == "write":
-            sql_instruct = f"""You are an expert SQL generator for PostgreSQL.
+            if db_type == "postgres":
+                sql_instruct = f"""You are an expert SQL generator for PostgreSQL.
 Here is the database schema:
 {schema_str}
 
 Generate a single valid SQL query that performs the write/schema-change the user requested. Also provide a plain-language, one-line summary of what this SQL will do.
-If the question is impossible to answer from this schema, generate exactly: SELECT 'IMPOSSIBLE' AS STATUS;
+If the question is impossible to answer from this schema and doesn't relate to standard database operations, generate exactly: SELECT 'IMPOSSIBLE' AS STATUS;
+"""
+            elif db_type == "mysql":
+                sql_instruct = f"""You are an expert SQL generator for MySQL.
+Here is the database schema:
+{schema_str}
+
+Generate a single valid SQL query that performs the write/schema-change the user requested. Also provide a plain-language, one-line summary of what this SQL will do.
+CRITICAL MYSQL RULES:
+- Use AUTO_INCREMENT for primary keys, NOT SERIAL.
+- Quote string literals with single quotes ('). Do not use double quotes.
+- Quote identifiers (tables/columns) with backticks (`), NOT double quotes.
+- Do not use PostgreSQL-specific syntax or functions.
+If the question is impossible to answer from this schema and doesn't relate to standard database operations, generate exactly: SELECT 'IMPOSSIBLE' AS STATUS;
 """
             t0 = time.time()
             sql_response = client.models.generate_content(
@@ -636,7 +808,7 @@ If the question is impossible to answer from this schema, generate exactly: SELE
                 user_conn.close()
                 return {"category": "write", "reply": reply, "chat_id": chat_id}
                 
-            is_destructive = is_highly_destructive(raw_sql)
+            is_destructive = is_highly_destructive(raw_sql, db_type)
             action_id = str(uuid.uuid4())
             
             pending_actions[action_id] = {
@@ -664,17 +836,9 @@ If the question is impossible to answer from this schema, generate exactly: SELE
 
     except Exception as e:
         print(f"Error in chat endpoint: {str(e)}")
-        sql_to_return = locals().get("raw_sql", None)
-        reply = "An error occurred while executing the query or contacting the AI API."
-        check_and_save_message(req.frontend_msg_id, app_conn, chat_id, 'system', reply, sql=sql_to_return)
         app_conn.close()
         user_conn.close()
-        return {
-             "category": chat_res.get("category", "unknown") if 'chat_res' in locals() else "unknown",
-             "reply": reply,
-             "sql": sql_to_return,
-             "chat_id": chat_id
-        }
+        raise HTTPException(status_code=500, detail="An error occurred while executing the query or contacting the AI API.")
 
 @app.post("/chat/approve-action")
 def approve_action(req: ActionDecisionRequest, request: Request, user_id: str = Depends(get_current_user)):
@@ -702,8 +866,8 @@ def approve_action(req: ActionDecisionRequest, request: Request, user_id: str = 
             if not req.confirm_text or req.confirm_text.strip() != "CONFIRM":
                 raise HTTPException(status_code=400, detail="This action is highly destructive. You must type exactly 'CONFIRM' (case-sensitive).")
                 
-        conn_string = get_active_db_connection_string(session_id, user_id)
-        user_conn = psycopg2.connect(conn_string)
+        conn_string, db_type = get_active_db_connection_string(session_id, user_id)
+        user_conn = get_db_connection(conn_string, db_type)
         try:
             with user_conn.cursor() as cur:
                 cur.execute(action["sql"])
