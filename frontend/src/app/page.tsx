@@ -17,6 +17,7 @@ export default function Home() {
   const [isAuthLoading, setIsAuthLoading] = useState(true);
 
   const [isConnected, setIsConnected] = useState<boolean | null>(null);
+  const [activeConnId, setActiveConnId] = useState<string | null>(null);
   const [isSelectingDB, setIsSelectingDB] = useState(false);
   const [savedConnections, setSavedConnections] = useState<DBConnection[]>([]);
   const [isLoadingConnections, setIsLoadingConnections] = useState(false);
@@ -73,12 +74,23 @@ export default function Home() {
     }
 
     async function checkStatusAndFetchConnections() {
+      const savedConnId = localStorage.getItem("activeConnId");
+      if (savedConnId) {
+        setActiveConnId(savedConnId);
+      }
+
       try {
-        const res = await fetch(`${API_URL}/db/status`, {
-          credentials: "include",
-        });
+        const headers: Record<string, string> = { "Authorization": `Bearer ${session?.access_token || ""}` };
+        if (savedConnId) headers["X-Connection-Id"] = savedConnId;
+
+        const res = await fetch(`${API_URL}/db/status`, { headers });
         const data = await res.json();
         setIsConnected(data.connected);
+        
+        if (!data.connected && savedConnId) {
+          localStorage.removeItem("activeConnId");
+          setActiveConnId(null);
+        }
 
         // Always fetch saved connections so they are ready if the user clicks "Switch Database"
         // (Even if they are currently connected)
@@ -96,7 +108,6 @@ export default function Home() {
     try {
       const res = await fetch(`${API_URL}/db/connections`, {
         headers: { "Authorization": `Bearer ${session?.access_token}` },
-        credentials: "include",
       });
       if (res.ok) {
         const data = await res.json();
@@ -131,7 +142,6 @@ export default function Home() {
           "Authorization": `Bearer ${session?.access_token}`
         },
         body: JSON.stringify({ name: connectionName, connection_string: connectionString }),
-        credentials: "include",
       });
 
       if (res.ok) {
@@ -149,10 +159,12 @@ export default function Home() {
         const selectRes = await fetch(`${API_URL}/db/connections/${newConnectionId}/select`, {
           method: "POST",
           headers: { "Authorization": `Bearer ${session?.access_token}` },
-          credentials: "include",
         });
 
         if (selectRes.ok) {
+          const selectData = await selectRes.json();
+          localStorage.setItem("activeConnId", selectData.conn_id);
+          setActiveConnId(selectData.conn_id);
           setIsConnected(true);
           setIsSelectingDB(false);
           setShowNewForm(false);
@@ -177,9 +189,11 @@ export default function Home() {
       const res = await fetch(`${API_URL}/db/connections/${id}/select`, {
         method: "POST",
         headers: { "Authorization": `Bearer ${session?.access_token}` },
-        credentials: "include",
       });
       if (res.ok) {
+        const data = await res.json();
+        localStorage.setItem("activeConnId", data.conn_id);
+        setActiveConnId(data.conn_id);
         setIsConnected(true);
         setIsSelectingDB(false);
         setShowNewForm(false);
@@ -205,7 +219,6 @@ export default function Home() {
       const res = await fetch(`${API_URL}/db/connections/${dbToDelete}`, {
         method: "DELETE",
         headers: { "Authorization": `Bearer ${session?.access_token}` },
-        credentials: "include",
       });
       if (res.ok) {
         setSavedConnections(prev => prev.filter(c => c.id !== dbToDelete));
@@ -280,7 +293,7 @@ export default function Home() {
   // 4. Connected State (Gate Passed) - unless they asked to select DB
   if (isConnected === true && !isSelectingDB) {
     // We pass onSwitchDatabase to flip isSelectingDB without destroying backend session
-    return <ChatUI session={session} onSwitchDatabase={() => setIsSelectingDB(true)} />;
+    return <ChatUI session={session} activeConnId={activeConnId} onSwitchDatabase={() => setIsSelectingDB(true)} />;
   }
 
   // 5. Not Connected or explicitly switching State -> Database Selection / Creation

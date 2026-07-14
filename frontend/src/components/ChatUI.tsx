@@ -83,7 +83,7 @@ import ConfirmModal from "./ConfirmModal";
 
 // ... previous type definitions ...
 
-export default function ChatUI({ session, onSwitchDatabase }: { session: Session; onSwitchDatabase?: () => void }) {
+export default function ChatUI({ session, activeConnId, onSwitchDatabase }: { session: Session; activeConnId: string | null; onSwitchDatabase?: () => void }) {
   const [chats, setChats] = useState<Chat[]>([]);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -132,8 +132,10 @@ export default function ChatUI({ session, onSwitchDatabase }: { session: Session
   const fetchChats = async () => {
     try {
       const res = await fetch(`${API_URL}/chats`, { 
-        headers: { "Authorization": `Bearer ${session.access_token}` },
-        credentials: "include" 
+        headers: { 
+          "Authorization": `Bearer ${session.access_token}`,
+          "X-Connection-Id": activeConnId || ""
+        }
       });
       if (res.ok) {
         const data = await res.json();
@@ -151,8 +153,10 @@ export default function ChatUI({ session, onSwitchDatabase }: { session: Session
     setIsLoadingChat(true);
     try {
       const res = await fetch(`${API_URL}/chats/${chatId}/messages`, { 
-        headers: { "Authorization": `Bearer ${session.access_token}` },
-        credentials: "include" 
+        headers: { 
+          "Authorization": `Bearer ${session.access_token}`,
+          "X-Connection-Id": activeConnId || ""
+        }
       });
       if (res.ok) {
         const data = await res.json();
@@ -204,10 +208,10 @@ export default function ChatUI({ session, onSwitchDatabase }: { session: Session
                method: "POST",
                headers: { 
                  "Content-Type": "application/json",
-                 "Authorization": `Bearer ${session.access_token}`
+                 "Authorization": `Bearer ${session.access_token}`,
+                 "X-Connection-Id": activeConnId || ""
                },
-               body: JSON.stringify({ action_id: msg.pendingAction.actionId, decision: "reject" }),
-               credentials: "include",
+               body: JSON.stringify({ action_id: msg.pendingAction.actionId, decision: "reject" })
              }).catch(console.error)
            );
         }
@@ -253,10 +257,10 @@ export default function ChatUI({ session, onSwitchDatabase }: { session: Session
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${session.access_token}`
+          "Authorization": `Bearer ${session.access_token}`,
+          "X-Connection-Id": activeConnId || ""
         },
         body: JSON.stringify(payload),
-        credentials: "include",
         signal: abortController.signal
       });
 
@@ -308,10 +312,10 @@ export default function ChatUI({ session, onSwitchDatabase }: { session: Session
           method: "POST",
           headers: { 
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${session.access_token}`
+            "Authorization": `Bearer ${session.access_token}`,
+            "X-Connection-Id": activeConnId || ""
           },
-          body: JSON.stringify({ message_id: frontendMsgId }),
-          credentials: "include"
+          body: JSON.stringify({ message_id: frontendMsgId })
         }).catch(console.error);
         
       } else {
@@ -344,10 +348,10 @@ export default function ChatUI({ session, onSwitchDatabase }: { session: Session
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${session.access_token}`
+          "Authorization": `Bearer ${session.access_token}`,
+          "X-Connection-Id": activeConnId || ""
         },
-        body: JSON.stringify({ action_id: actionId, decision, confirm_text: confirmText }),
-        credentials: "include",
+        body: JSON.stringify({ action_id: actionId, decision, confirm_text: confirmText })
       });
       const data = await res.json();
       const statusMap: Record<"approve" | "reject", "approved" | "rejected"> = { approve: "approved", reject: "rejected" };
@@ -409,8 +413,10 @@ export default function ChatUI({ session, onSwitchDatabase }: { session: Session
     try {
       const res = await fetch(`${API_URL}/chats/${chatToDelete}`, {
         method: "DELETE",
-        headers: { "Authorization": `Bearer ${session.access_token}` },
-        credentials: "include"
+        headers: { 
+          "Authorization": `Bearer ${session.access_token}`,
+          "X-Connection-Id": activeConnId || ""
+        }
       });
       if (res.ok) {
         setChats(chats.filter(c => c.id !== chatToDelete));
@@ -441,10 +447,10 @@ export default function ChatUI({ session, onSwitchDatabase }: { session: Session
           method: "PATCH",
           headers: { 
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${session.access_token}`
+            "Authorization": `Bearer ${session.access_token}`,
+            "X-Connection-Id": activeConnId || ""
           },
-          body: JSON.stringify({ title: editTitle.trim() }),
-          credentials: "include"
+          body: JSON.stringify({ title: editTitle.trim() })
         });
         fetchChats();
       } catch (err) {

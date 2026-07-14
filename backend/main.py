@@ -162,17 +162,25 @@ app = FastAPI(
     title="Quera API",
     description="Quera backend API"
 )
-# Enable CORS for the frontend on port 3000
+# Enable CORS
+allowed_origins_str = os.environ.get("ALLOWED_ORIGINS", "http://localhost:3000")
+allowed_origins = [origin.strip() for origin in allowed_origins_str.split(",") if origin.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# In-memory dictionary to store session_id -> db_connection_id
-sessions: dict[str, str] = {}
+def verify_connection_ownership(conn_id: str, user_id: str, app_conn) -> None:
+    if not conn_id:
+        raise HTTPException(status_code=400, detail="Missing X-Connection-Id header")
+    with app_conn.cursor() as cur:
+        cur.execute("SELECT id FROM db_connections WHERE id = %s AND user_id = %s", (conn_id, user_id))
+        if not cur.fetchone():
+            raise HTTPException(status_code=403, detail="Connection not found or access denied")
 # In-memory dictionary to store pending write actions
 pending_actions: dict[str, dict] = {}
 # In-memory set of cancelled frontend message IDs
@@ -198,12 +206,10 @@ def get_app_db_conn_rls(user_id: str):
         cur.execute("SET LOCAL request.jwt.claims = %s;", (claim_json,))
     return conn
 
-def get_active_db_connection_string(session_id: str, user_id: str):
-    if session_id not in sessions:
-        raise HTTPException(status_code=401, detail="Active database session required. Please reconnect.")
-        
-    conn_id = sessions[session_id]
+def get_active_db_connection_string(conn_id: str, user_id: str):
     app_conn = get_app_db_conn_rls(user_id)
+    verify_connection_ownership(conn_id, user_id, app_conn)
+    
     with app_conn.cursor() as cur:
         cur.execute("SELECT encrypted_connection_string, db_type FROM db_connections WHERE id = %s AND user_id = %s", (conn_id, user_id))
         row = cur.fetchone()
@@ -480,7 +486,7 @@ def create_db_connection(req: CreateDbConnectionReq, user_id: str = Depends(get_
     return {"id": new_id, "name": req.name}
 
 @app.post("/db/connections/{conn_id}/select")
-def select_db_connection(conn_id: str, response: Response, user_id: str = Depends(get_current_user)):
+def select_db_connection(conn_id: str, user_id: str = Depends(get_current_user)):
     # Verify ownership implicitly through RLS and explicitly through WHERE clause
     conn = get_app_db_conn_rls(user_id)
     with conn.cursor() as cur:
@@ -491,17 +497,7 @@ def select_db_connection(conn_id: str, response: Response, user_id: str = Depend
     if not row:
         raise HTTPException(status_code=404, detail="Connection not found")
         
-    session_id = str(uuid.uuid4())
-    sessions[session_id] = conn_id
-    
-    response.set_cookie(
-        key="session_id",
-        value=session_id,
-        httponly=True,
-        samesite="lax",
-        max_age=86400  # 1 day
-    )
-    return {"success": True}
+    return {"success": True, "conn_id": conn_id}
 
 @app.delete("/db/connections/{conn_id}")
 def delete_db_connection(conn_id: str, user_id: str = Depends(get_current_user)):
@@ -513,41 +509,44 @@ def delete_db_connection(conn_id: str, user_id: str = Depends(get_current_user))
     return {"success": True}
 
 @app.post("/db/disconnect")
-def disconnect_db(response: Response):
-    response.delete_cookie("session_id")
+def disconnect_db():
     return {"success": True}
 
 @app.get("/db/status")
-def db_status(request: Request):
-    session_id = request.cookies.get("session_id")
-    if session_id and session_id in sessions:
+def db_status(request: Request, user_id: str = Depends(get_current_user)):
+    conn_id = request.headers.get("X-Connection-Id")
+    if not conn_id:
+        return {"connected": False}
+        
+    app_conn = get_app_db_conn_rls(user_id)
+    try:
+        verify_connection_ownership(conn_id, user_id, app_conn)
         return {"connected": True}
-    return {"connected": False}
+    except HTTPException:
+        return {"connected": False}
+    finally:
+        app_conn.close()
 
 # --- CHAT CRUD ENDPOINTS ---
 
 @app.get("/chats")
 def get_chats(request: Request, user_id: str = Depends(get_current_user)):
-    session_id = request.cookies.get("session_id")
-    if not session_id or session_id not in sessions:
-        raise HTTPException(status_code=401, detail="Active database session required")
-    conn_id = sessions[session_id]
+    conn_id = request.headers.get("X-Connection-Id")
+    app_conn = get_app_db_conn_rls(user_id)
+    verify_connection_ownership(conn_id, user_id, app_conn)
 
-    conn = get_app_db_conn_rls(user_id)
-    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+    with app_conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute("SELECT id, title, created_at, updated_at FROM chats WHERE user_id = %s AND (db_connection_id = %s OR db_connection_id IS NULL) ORDER BY updated_at DESC", (user_id, conn_id))
         chats = cur.fetchall()
-    conn.close()
+    app_conn.close()
     return chats
 
 @app.post("/chats")
 def create_chat(req: CreateChatReq, request: Request, user_id: str = Depends(get_current_user)):
-    session_id = request.cookies.get("session_id")
-    if not session_id or session_id not in sessions:
-        raise HTTPException(status_code=401, detail="Active database session required")
-    conn_id = sessions[session_id]
-
+    conn_id = request.headers.get("X-Connection-Id")
     conn = get_app_db_conn_rls(user_id)
+    verify_connection_ownership(conn_id, user_id, conn)
+
     with conn.cursor() as cur:
         cur.execute("INSERT INTO chats (title, user_id, db_connection_id) VALUES (%s, %s, %s) RETURNING id", (req.title, user_id, conn_id))
         chat_id = cur.fetchone()[0]
@@ -557,12 +556,10 @@ def create_chat(req: CreateChatReq, request: Request, user_id: str = Depends(get
 
 @app.get("/chats/{chat_id}/messages")
 def get_chat_messages(chat_id: str, request: Request, user_id: str = Depends(get_current_user)):
-    session_id = request.cookies.get("session_id")
-    if not session_id or session_id not in sessions:
-        raise HTTPException(status_code=401, detail="Active database session required")
-    conn_id = sessions[session_id]
-
+    conn_id = request.headers.get("X-Connection-Id")
     conn = get_app_db_conn_rls(user_id)
+    verify_connection_ownership(conn_id, user_id, conn)
+
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute("""
             SELECT m.id, m.role, m.content, m.sql, m.action_id, m.summary, m.is_destructive, m.data_json, m.created_at 
@@ -597,29 +594,25 @@ def delete_chat(chat_id: str, user_id: str = Depends(get_current_user)):
 
 @app.post("/chat")
 def chat_endpoint(req: ChatMessageRequest, request: Request, user_id: str = Depends(get_current_user)):
-    session_id = request.cookies.get("session_id")
-    if not session_id or session_id not in sessions:
-        raise HTTPException(status_code=401, detail="Active database session required. Please reconnect.")
+    conn_id = request.headers.get("X-Connection-Id")
+    app_conn = get_app_db_conn_rls(user_id)
+    verify_connection_ownership(conn_id, user_id, app_conn)
     
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key or api_key == "your_gemini_api_key_here":
         raise HTTPException(status_code=500, detail="GEMINI_API_KEY not configured on server.")
 
-    app_conn = get_app_db_conn_rls(user_id)
-    
-    conn_string, db_type = get_active_db_connection_string(session_id, user_id)
+    conn_string, db_type = get_active_db_connection_string(conn_id, user_id)
     user_conn = get_db_connection(conn_string, db_type)
     
     chat_id = req.chat_id
     if not chat_id:
-        conn_id = sessions[session_id]
         with app_conn.cursor() as cur:
             cur.execute("INSERT INTO chats (title, user_id, db_connection_id) VALUES ('New Chat', %s, %s) RETURNING id", (user_id, conn_id))
             chat_id = cur.fetchone()[0]
         app_conn.commit()
     else:
         # Verify ownership of the requested chat and its association with the active connection
-        conn_id = sessions[session_id]
         with app_conn.cursor() as cur:
             cur.execute("SELECT id FROM chats WHERE id = %s AND user_id = %s AND (db_connection_id = %s OR db_connection_id IS NULL)", (chat_id, user_id, conn_id))
             if not cur.fetchone():
@@ -812,7 +805,7 @@ If the question is impossible to answer from this schema and doesn't relate to s
             action_id = str(uuid.uuid4())
             
             pending_actions[action_id] = {
-                "session_id": session_id,
+                "conn_id": conn_id,
                 "sql": raw_sql,
                 "summary": summary,
                 "is_destructive": is_destructive,
@@ -842,21 +835,22 @@ If the question is impossible to answer from this schema and doesn't relate to s
 
 @app.post("/chat/approve-action")
 def approve_action(req: ActionDecisionRequest, request: Request, user_id: str = Depends(get_current_user)):
-    session_id = request.cookies.get("session_id")
-    if not session_id or session_id not in sessions:
-        raise HTTPException(status_code=401, detail="Active database session required.")
+    conn_id = request.headers.get("X-Connection-Id")
+    app_conn = get_app_db_conn_rls(user_id)
+    verify_connection_ownership(conn_id, user_id, app_conn)
         
     if req.action_id not in pending_actions:
+        app_conn.close()
         raise HTTPException(status_code=404, detail="Pending action not found or expired.")
         
     action = pending_actions[req.action_id]
     
-    if action["session_id"] != session_id:
-        raise HTTPException(status_code=403, detail="Not authorized for this action.")
+    if action["conn_id"] != conn_id:
+        app_conn.close()
+        raise HTTPException(status_code=403, detail="Connection mismatch for this action.")
         
     if req.decision == "reject":
         del pending_actions[req.action_id]
-        app_conn = get_app_db_conn_rls(user_id)
         save_message(app_conn, action["chat_id"], 'system', "🚫 Action cancelled successfully.")
         app_conn.close()
         return {"status": "cancelled", "reply": "Action cancelled successfully."}
@@ -864,9 +858,10 @@ def approve_action(req: ActionDecisionRequest, request: Request, user_id: str = 
     if req.decision == "approve":
         if action["is_destructive"]:
             if not req.confirm_text or req.confirm_text.strip() != "CONFIRM":
+                app_conn.close()
                 raise HTTPException(status_code=400, detail="This action is highly destructive. You must type exactly 'CONFIRM' (case-sensitive).")
                 
-        conn_string, db_type = get_active_db_connection_string(session_id, user_id)
+        conn_string, db_type = get_active_db_connection_string(conn_id, user_id)
         user_conn = get_db_connection(conn_string, db_type)
         try:
             with user_conn.cursor() as cur:
