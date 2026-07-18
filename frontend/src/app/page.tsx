@@ -50,6 +50,20 @@ export default function Home() {
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
 
+  const handleConnectionStringChange = (val: string) => {
+    setConnectionString(val);
+    if (!connectionName) {
+      try {
+        const url = new URL(val);
+        if (url.hostname) {
+          setConnectionName(url.hostname.split('.')[0]);
+        }
+      } catch (e) {
+        // invalid URL, ignore
+      }
+    }
+  };
+
   // Auth Effect
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -228,19 +242,7 @@ export default function Home() {
     }
   };
 
-  // Derive sensible default name when pasting a string
-  useEffect(() => {
-    if (connectionString && !connectionName) {
-      try {
-        const url = new URL(connectionString);
-        if (url.hostname) {
-          setConnectionName(url.hostname.split('.')[0]);
-        }
-      } catch (e) {
-        // invalid URL, ignore
-      }
-    }
-  }, [connectionString, connectionName]);
+  // Removed faulty useEffect that was aggressively re-populating connectionName on empty
 
   // 1. Loading State (Auth)
   if (isAuthLoading) {
@@ -389,7 +391,9 @@ export default function Home() {
                 placeholder="postgresql://user:password@host:port/dbname"
                 className="w-full px-4 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
                 value={connectionString}
-                onChange={(e) => setConnectionString(e.target.value)}
+                onChange={(e) => handleConnectionStringChange(e.target.value)}
+                autoComplete="new-password"
+                data-1p-ignore
                 required
               />
             </div>
@@ -405,6 +409,8 @@ export default function Home() {
                 className="w-full px-4 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
                 value={connectionName}
                 onChange={(e) => setConnectionName(e.target.value)}
+                autoComplete="off"
+                data-1p-ignore
                 required
               />
             </div>
