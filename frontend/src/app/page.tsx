@@ -9,6 +9,7 @@ import ConfirmModal from "@/components/ConfirmModal";
 type DBConnection = {
   id: string;
   name: string;
+  db_type: string;
   created_at: string;
 };
 
@@ -166,6 +167,7 @@ export default function Home() {
         setSavedConnections(prev => [{
           id: data.id,
           name: data.name,
+          db_type: connectionString.startsWith('postgres') ? 'postgres' : 'mysql',
           created_at: new Date().toISOString()
         }, ...prev]);
 
@@ -294,8 +296,7 @@ export default function Home() {
 
   // 4. Connected State (Gate Passed) - unless they asked to select DB
   if (isConnected === true && !isSelectingDB) {
-    // We pass onSwitchDatabase to flip isSelectingDB without destroying backend session
-    return <ChatUI session={session} activeConnId={activeConnId} onSwitchDatabase={() => setIsSelectingDB(true)} />;
+    return <ChatUI session={session} activeConnId={activeConnId} savedConnections={savedConnections} onSwitchDatabase={() => setIsSelectingDB(true)} onSelectConnection={handleSelectConnection} onConnectionsChange={fetchSavedConnections} />;
   }
 
   // 5. Not Connected or explicitly switching State -> Database Selection / Creation
@@ -389,7 +390,7 @@ export default function Home() {
                 id="connString"
                 type="password"
                 placeholder="postgresql://user:password@host:port/dbname"
-                className="w-full px-4 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+                className="w-full px-4 py-2 font-mono bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
                 value={connectionString}
                 onChange={(e) => handleConnectionStringChange(e.target.value)}
                 autoComplete="new-password"

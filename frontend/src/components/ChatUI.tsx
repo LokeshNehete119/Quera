@@ -83,7 +83,7 @@ import ConfirmModal from "./ConfirmModal";
 
 // ... previous type definitions ...
 
-export default function ChatUI({ session, activeConnId, onSwitchDatabase }: { session: Session; activeConnId: string | null; onSwitchDatabase?: () => void }) {
+export default function ChatUI({ session, activeConnId, savedConnections, onSwitchDatabase, onSelectConnection, onConnectionsChange }: { session: Session; activeConnId: string | null; savedConnections?: any[]; onSwitchDatabase?: () => void; onSelectConnection?: (id: string) => void; onConnectionsChange?: () => void }) {
   const [chats, setChats] = useState<Chat[]>([]);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -108,13 +108,25 @@ export default function ChatUI({ session, activeConnId, onSwitchDatabase }: { se
   const [modalOpen, setModalOpen] = useState(false);
   const [chatToDelete, setChatToDelete] = useState<string | null>(null);
 
+  const [editingConnId, setEditingConnId] = useState<string | null>(null);
+  const [editConnTitle, setEditConnTitle] = useState("");
+  const [connModalOpen, setConnModalOpen] = useState(false);
+  const [connToDelete, setConnToDelete] = useState<string | null>(null);
+
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme") as Theme;
     if (savedTheme) {
       setTheme(savedTheme);
     }
-    fetchChats();
   }, []);
+
+  useEffect(() => {
+    if (activeConnId) {
+      fetchChats();
+      setActiveChatId(null);
+      setMessages([]);
+    }
+  }, [activeConnId]);
 
   useEffect(() => {
     const root = window.document.documentElement;
@@ -466,6 +478,65 @@ export default function ChatUI({ session, activeConnId, onSwitchDatabase }: { se
     else setTheme('light');
   };
 
+  const startRenameConn = (e: React.MouseEvent, conn: any) => {
+    e.stopPropagation();
+    setEditingConnId(conn.id);
+    setEditConnTitle(conn.name);
+  };
+
+  const saveRenameConn = async (e?: React.FormEvent | React.FocusEvent, cancel: boolean = false) => {
+    if (e) e.preventDefault();
+    if (cancel) {
+      setEditingConnId(null);
+      return;
+    }
+    if (editingConnId && editConnTitle.trim()) {
+      try {
+        await fetch(`${API_URL}/db/connections/${editingConnId}`, {
+          method: "PATCH",
+          headers: { 
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${session.access_token}`
+          },
+          body: JSON.stringify({ name: editConnTitle.trim() })
+        });
+        if (onConnectionsChange) onConnectionsChange();
+      } catch (err) {
+         console.error(err);
+      }
+    }
+    setEditingConnId(null);
+  };
+
+  const requestDeleteConn = (e: React.MouseEvent, connId: string) => {
+    e.stopPropagation();
+    setConnToDelete(connId);
+    setConnModalOpen(true);
+  };
+
+  const confirmDeleteConn = async () => {
+    if (!connToDelete) return;
+    
+    setConnModalOpen(false);
+    try {
+      const res = await fetch(`${API_URL}/db/connections/${connToDelete}`, {
+        method: "DELETE",
+        headers: { 
+          "Authorization": `Bearer ${session.access_token}`
+        }
+      });
+      if (res.ok) {
+        if (onConnectionsChange) onConnectionsChange();
+        if (activeConnId === connToDelete && onSwitchDatabase) {
+           onSwitchDatabase();
+        }
+      }
+    } catch (e) {
+      console.error("Failed to delete connection", e);
+    }
+    setConnToDelete(null);
+  };
+
   const handleSwitchDatabase = () => {
     if (onSwitchDatabase) onSwitchDatabase();
   };
@@ -537,6 +608,72 @@ export default function ChatUI({ session, activeConnId, onSwitchDatabase }: { se
         </div>
         
         <div className="flex-1 overflow-y-auto px-2 pb-4">
+          <div className="mb-6">
+            <div className="flex items-center justify-between px-2 mb-2 mt-4">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                Connections
+              </p>
+              <button onClick={handleSwitchDatabase} className="text-gray-400 hover:text-white transition-colors cursor-pointer" title="Manage Connections">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+              </button>
+            </div>
+            {(!savedConnections || savedConnections.length === 0) ? (
+              <div className="px-3 py-4 mx-2 bg-gray-800/50 rounded-lg border border-gray-700/50 text-center">
+                <p className="text-xs text-gray-400 mb-2">No databases connected yet</p>
+                <button onClick={handleSwitchDatabase} className="text-xs font-medium text-indigo-400 hover:text-indigo-300 transition-colors cursor-pointer">
+                  Connect one to get started
+                </button>
+              </div>
+            ) : (
+              <ul className="space-y-1">
+                {savedConnections.map(conn => (
+                  <li key={conn.id} className={`group flex items-center justify-between px-2 py-2 rounded-lg cursor-pointer transition-colors ${activeConnId === conn.id ? 'bg-gray-800' : 'hover:bg-gray-800/50'}`} onClick={() => { if (conn.id !== activeConnId && onSelectConnection) onSelectConnection(conn.id) }}>
+                    {editingConnId === conn.id ? (
+                      <form onSubmit={(e) => saveRenameConn(e, false)} className="flex-1 flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full flex-shrink-0 ${conn.db_type === 'postgres' ? 'bg-blue-500' : conn.db_type === 'mysql' ? 'bg-orange-400' : 'bg-gray-500'}`} />
+                        <input
+                          type="text"
+                          autoFocus
+                          value={editConnTitle}
+                          onChange={(e) => setEditConnTitle(e.target.value)}
+                          onBlur={(e) => saveRenameConn(e, false)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Escape") {
+                              saveRenameConn(e, true);
+                            }
+                          }}
+                          className="flex-1 bg-gray-900 text-white text-sm px-2 py-0.5 rounded outline-none border border-gray-600 focus:border-blue-500"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      </form>
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <div className={`w-2 h-2 rounded-full flex-shrink-0 ${conn.db_type === 'postgres' ? 'bg-blue-500' : conn.db_type === 'mysql' ? 'bg-orange-400' : 'bg-gray-500'}`} title={conn.db_type} />
+                          <span className={`text-sm truncate ${activeConnId === conn.id ? 'text-white font-medium' : 'text-gray-300 group-hover:text-white'}`}>{conn.name}</span>
+                        </div>
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 ml-2">
+                          <button onClick={(e) => startRenameConn(e, conn)} className="p-1 text-gray-400 hover:text-white transition-colors cursor-pointer" title="Rename Connection">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                              <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                            </svg>
+                          </button>
+                          <button onClick={(e) => requestDeleteConn(e, conn.id)} className="p-1 text-gray-400 hover:text-red-400 transition-colors cursor-pointer" title="Delete Connection">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                            </svg>
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 px-2 mt-2">
             Recent Chats
           </p>
@@ -596,13 +733,39 @@ export default function ChatUI({ session, activeConnId, onSwitchDatabase }: { se
               <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
             </div>
           ) : messages.length === 0 ? (
-            <div className="flex-1 flex flex-col items-center justify-center text-gray-500 dark:text-gray-400 max-w-2xl mx-auto w-full px-4">
-              <img src="/logo.svg" alt="Quera Logo" className="w-16 h-16 mb-6 drop-shadow-md" />
-              <h2 className="text-2xl font-medium text-gray-800 dark:text-gray-200 mb-8 text-center">
-                What would you like to know, {session.user.user_metadata?.full_name?.split(' ')[0] || 'there'}?
-              </h2>
+            <div className="flex-1 flex flex-col items-center justify-center text-gray-500 dark:text-gray-400 w-full relative">
+              {/* Background schema-graph motif */}
+              <div className="absolute inset-0 z-0 pointer-events-none opacity-[0.06] text-indigo-500 dark:text-indigo-400 flex items-center justify-center overflow-hidden">
+                <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+                  <defs>
+                    <pattern id="schema-pattern" x="0" y="0" width="100" height="100" patternUnits="userSpaceOnUse">
+                      <circle cx="20" cy="20" r="3" fill="currentColor"/>
+                      <circle cx="80" cy="50" r="3" fill="currentColor"/>
+                      <circle cx="40" cy="80" r="3" fill="currentColor"/>
+                      <path d="M20 20 L80 50 L40 80 Z" stroke="currentColor" strokeWidth="1" fill="none"/>
+                      <rect x="10" y="25" width="20" height="10" stroke="currentColor" strokeWidth="1" fill="none" rx="2"/>
+                      <rect x="70" y="55" width="20" height="10" stroke="currentColor" strokeWidth="1" fill="none" rx="2"/>
+                      <rect x="30" y="85" width="20" height="10" stroke="currentColor" strokeWidth="1" fill="none" rx="2"/>
+                    </pattern>
+                  </defs>
+                  <rect x="0" y="0" width="100%" height="100%" fill="url(#schema-pattern)"/>
+                </svg>
+              </div>
+
+              <div className="max-w-2xl mx-auto w-full px-4 flex flex-col items-center relative z-10">
+                <img src="/logo.svg" alt="Quera Logo" className="w-16 h-16 mb-6 drop-shadow-md" />
+                
+                {activeConnId && savedConnections && (
+                  <p className="text-sm font-medium text-indigo-500 dark:text-indigo-400 mb-2 tracking-wide uppercase">
+                    Connected to {savedConnections.find(c => c.id === activeConnId)?.name || "Database"}
+                  </p>
+                )}
+                
+                <h2 className="text-2xl font-medium text-gray-800 dark:text-gray-200 mb-8 text-center">
+                  What would you like to know, {session.user.user_metadata?.full_name?.split(' ')[0] || 'there'}?
+                </h2>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full">
                 <button 
                   onClick={() => handleSend("Show me all tables in the database")}
                   className="p-4 border border-gray-300 dark:border-gray-700 rounded-2xl text-left hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
@@ -633,6 +796,7 @@ export default function ChatUI({ session, activeConnId, onSwitchDatabase }: { se
                 </button>
               </div>
             </div>
+          </div>
           ) : (
             <div className="max-w-3xl mx-auto w-full space-y-6">
               {messages.map((msg) => (
@@ -880,6 +1044,13 @@ export default function ChatUI({ session, activeConnId, onSwitchDatabase }: { se
         message="Are you sure you want to delete this chat? This action cannot be undone."
         onConfirm={confirmDelete}
         onCancel={() => setModalOpen(false)}
+      />
+      <ConfirmModal
+        isOpen={connModalOpen}
+        title="Delete Connection"
+        message="Are you sure you want to delete this database connection? This will also delete all associated chats and history."
+        onConfirm={confirmDeleteConn}
+        onCancel={() => setConnModalOpen(false)}
       />
     </div>
   );

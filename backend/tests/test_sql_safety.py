@@ -71,6 +71,18 @@ test_cases = [
         "expected_read": False,
         "expected_write": True,
         "desc": "Unparseable string"
+    },
+    {
+        "sql": "SELECT 'orders_rich' UNION ALL SELECT 'products_rich'",
+        "expected_read": True,
+        "expected_write": False,
+        "desc": "Valid UNION ALL SELECT"
+    },
+    {
+        "sql": "SELECT 'orders' UNION ALL SELECT 'products'; DROP TABLE users;",
+        "expected_read": False,
+        "expected_write": True,
+        "desc": "Stacked query with UNION (read context)"
     }
 ]
 

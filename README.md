@@ -102,7 +102,11 @@ Two isolated Supabase projects are used deliberately: one holds the app's own ch
 
 **Verified live** against a real MySQL-backed test database with seeded data — confirmed correct table narrowing on specific queries, correct full-schema fallback on vague ones, and a correctly executed multi-table JOIN with real returned rows.
 
+**Measured efficiency gain:** on the 9-table evaluation schema, for the 12 of 16 cases where retrieval genuinely narrowed the schema (the remaining 4 correctly triggered full-schema fallback for broad/ambiguous queries), the schema text sent to Gemini was reduced by an average of **58.5%**. Averaged across all 16 cases including intentional fallbacks, the blended reduction was **43.9%**. These numbers were measured on a 9-table test schema only — actual reduction on a real user's database will depend on its size and structure, and was not separately benchmarked at larger scale. A reasonable expectation is that the percentage improves on wider schemas, since the relevant-table set stays small while the total table count grows, but this is an untested hypothesis, not a measured result.
+
 **Known open gap, intentionally deferred:** a genuinely broad query (e.g. "show me everything") now correctly receives the full schema, but a single SQL `SELECT` statement structurally cannot represent the contents of 9+ unrelated tables at once — this is a generation/UX-level problem, not a retrieval problem, and is tracked separately rather than folded into this feature's scope.
+
+**Known limitation, found downstream of retrieval, not caused by it:** schema-statistics questions that require aggregate reasoning across every table (e.g. "count how many tables have more than 2 columns") are unreliable regardless of dialect, even when retrieval correctly supplies the full schema. This traced back to Gemini attempting multi-step counting via free-text reasoning rather than delegating the count to SQL's own aggregation (e.g. an `information_schema` `GROUP BY`/`HAVING` query) — a known LLM reasoning weakness, not a bug in the retrieval or validation layers. Deliberately not chased further given low real-world frequency of this query type; the correct fix (prompting Gemini to generate an aggregate SQL query instead of reasoning manually) is understood but deferred.
 
 ---
 

@@ -292,6 +292,9 @@ class CreateDbConnectionReq(BaseModel):
     name: str
     connection_string: str
 
+class ConnectionUpdate(BaseModel):
+    name: str
+
 @app.post("/chat/cancel")
 def cancel_chat(req: CancelRequest, user_id: str = Depends(get_current_user)):
     cancelled_messages.add(req.message_id)
@@ -540,7 +543,7 @@ def is_safe_select_query(query: str, db_type: str = "postgres") -> bool:
         return False
         
     stmt = parsed[0]
-    if not isinstance(stmt, exp.Select):
+    if not isinstance(stmt, (exp.Select, exp.Union, exp.Intersect, exp.Except)):
         return False
         
     # Writable CTE / Nested Statement Check
@@ -680,6 +683,15 @@ def select_db_connection(conn_id: str, user_id: str = Depends(get_current_user))
         raise HTTPException(status_code=404, detail="Connection not found")
         
     return {"success": True, "conn_id": conn_id}
+
+@app.patch("/db/connections/{conn_id}")
+def update_db_connection(conn_id: str, req: ConnectionUpdate, user_id: str = Depends(get_current_user)):
+    conn = get_app_db_conn_rls(user_id)
+    with conn.cursor() as cur:
+        cur.execute("UPDATE db_connections SET name = %s WHERE id = %s AND user_id = %s", (req.name, conn_id, user_id))
+    conn.commit()
+    conn.close()
+    return {"success": True}
 
 @app.delete("/db/connections/{conn_id}")
 def delete_db_connection(conn_id: str, user_id: str = Depends(get_current_user)):
@@ -856,6 +868,7 @@ Here is the database schema:
 {schema_str}
 
 Generate a single valid SELECT query that answers the user's question. 
+You may query the tables listed in the schema, or standard MySQL system catalogs (like information_schema) if the user asks metadata questions about the database itself.
 CRITICAL MYSQL RULES:
 - Quote string literals with single quotes ('). Do not use double quotes.
 - Quote identifiers (tables/columns) with backticks (`), NOT double quotes.
