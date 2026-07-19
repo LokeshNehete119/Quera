@@ -22,7 +22,7 @@ from sqlglot import exp
 
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-from sentence_transformers import SentenceTransformer
+# lazy load sentence_transformers inside get_relevant_schema
 
 from google import genai
 from google.genai import types
@@ -494,6 +494,7 @@ def get_relevant_schema(user_query: str, full_schema: str, schema_graph: dict, d
     # Generate Embeddings
     global schema_retrieval_model
     if schema_retrieval_model is None:
+        from sentence_transformers import SentenceTransformer
         schema_retrieval_model = SentenceTransformer('all-MiniLM-L6-v2')
         
     try:
