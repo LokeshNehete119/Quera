@@ -316,8 +316,8 @@ export default function Home() {
   // 1. Loading State (Auth)
   if (isAuthLoading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
-        <div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full"></div>
+      <main className="flex min-h-screen items-center justify-center bg-gray-900">
+        <div className="animate-spin h-8 w-8 border-4 border-accent border-t-transparent rounded-full"></div>
       </main>
     );
   }
@@ -326,8 +326,7 @@ export default function Home() {
   if (!session) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center bg-[#0a0a0f] relative overflow-hidden transition-colors duration-200">
-        {/* Radial Glow Background */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-indigo-600/20 rounded-full blur-[100px] pointer-events-none mix-blend-screen opacity-70"></div>
+        {/* Radial Glow Background Removed */}
         
         <div className="relative z-10 w-full max-w-md px-4 flex flex-col items-center">
           <div className="flex items-center justify-center gap-3 mb-10">
@@ -336,13 +335,13 @@ export default function Home() {
           </div>
 
           <h1 className="text-3xl font-bold text-white mb-3 text-center tracking-tight">
-            Talk to your database. <span className="relative whitespace-nowrap"><span className="relative z-10">No SQL required.</span><span className="absolute left-0 bottom-1 w-full h-[3px] bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full"></span></span>
+            Talk to your database. <span className="relative whitespace-nowrap"><span className="relative z-10">No SQL required.</span><span className="absolute left-0 bottom-1 w-full h-[3px] bg-accent rounded-full"></span></span>
           </h1>
           <p className="text-gray-400 mb-8 text-center text-sm leading-relaxed max-w-sm">
             Connect your PostgreSQL or MySQL database and query it in natural language — every write reviewed before it runs.
           </p>
 
-          <div className="bg-[#111118] border border-indigo-500/20 p-8 rounded-2xl shadow-2xl w-full text-left">
+          <div className="bg-[#111118] border border-accent/20 p-8 rounded-2xl shadow-2xl w-full text-left">
             <h2 className="text-2xl font-bold text-white mb-1">
               {isSignUp ? "Create an account" : "Welcome back"}
             </h2>
@@ -365,7 +364,7 @@ export default function Home() {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="name@example.com"
                   required
-                  className="w-full px-4 py-2.5 bg-[#0a0a0f] border border-gray-700/50 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-white placeholder-gray-600"
+                  className="w-full px-4 py-2.5 bg-[#0a0a0f] border border-gray-700/50 rounded-xl focus:ring-2 focus:ring-accent focus:border-accent outline-none transition-all text-white placeholder-gray-600"
                 />
               </div>
               <div>
@@ -375,7 +374,7 @@ export default function Home() {
                     <button 
                       type="button"
                       onClick={() => { setForgotEmail(email); setForgotModalOpen(true); }}
-                      className="text-sm font-medium text-indigo-400 hover:text-indigo-300 transition-colors cursor-pointer"
+                      className="text-sm font-medium text-accent hover:text-accent-hover transition-colors cursor-pointer"
                     >
                       Forgot password?
                     </button>
@@ -387,7 +386,7 @@ export default function Home() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   required
-                  className="w-full px-4 py-2.5 bg-[#0a0a0f] border border-gray-700/50 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-white placeholder-gray-600"
+                  className="w-full px-4 py-2.5 bg-[#0a0a0f] border border-gray-700/50 rounded-xl focus:ring-2 focus:ring-accent focus:border-accent outline-none transition-all text-white placeholder-gray-600"
                 />
                 {isSignUp && (
                   <PasswordStrength password={password} onValidationChange={setIsPasswordStrong} />
@@ -403,7 +402,7 @@ export default function Home() {
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="••••••••"
                     required
-                    className="w-full px-4 py-2.5 bg-[#0a0a0f] border border-gray-700/50 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-white placeholder-gray-600"
+                    className="w-full px-4 py-2.5 bg-[#0a0a0f] border border-gray-700/50 rounded-xl focus:ring-2 focus:ring-accent focus:border-accent outline-none transition-all text-white placeholder-gray-600"
                   />
                 </div>
               )}
@@ -411,7 +410,7 @@ export default function Home() {
               <button
                 type="submit"
                 disabled={authFormLoading || (isSignUp && (!isPasswordStrong || password !== confirmPassword))}
-                className="w-full mt-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 px-4 rounded-xl transition-colors shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full mt-2 bg-accent hover:bg-accent-hover text-white font-medium py-2.5 px-4 rounded-xl transition-colors shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {authFormLoading ? "Please wait..." : (isSignUp ? "Create account" : "Sign in")}
               </button>
@@ -444,7 +443,7 @@ export default function Home() {
               {isSignUp ? "Already have an account?" : "No account?"}
               <button 
                 onClick={() => { setIsSignUp(!isSignUp); setAuthError(""); }} 
-                className="ml-1.5 text-indigo-400 hover:text-indigo-300 font-medium transition-colors cursor-pointer"
+                className="ml-1.5 text-accent hover:text-accent-hover font-medium transition-colors cursor-pointer"
               >
                 {isSignUp ? "Sign in" : "Create one"}
               </button>
@@ -490,7 +489,7 @@ export default function Home() {
                     onChange={(e) => setForgotEmail(e.target.value)}
                     placeholder="name@example.com"
                     required
-                    className="w-full px-3 py-2 bg-[#0a0a0f] border border-gray-700/50 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-white placeholder-gray-600"
+                    className="w-full px-3 py-2 bg-[#0a0a0f] border border-gray-700/50 rounded-xl focus:ring-2 focus:ring-accent focus:border-accent outline-none transition-all text-white placeholder-gray-600"
                   />
                 </div>
                 <div className="flex justify-end gap-3 mt-4">
@@ -504,7 +503,7 @@ export default function Home() {
                   <button
                     type="submit"
                     disabled={isForgotLoading || !forgotEmail}
-                    className="px-4 py-2 rounded-xl text-sm font-medium bg-indigo-600 hover:bg-indigo-700 text-white transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                    className="px-4 py-2 rounded-xl text-sm font-medium bg-accent hover:bg-accent-hover text-white transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
                   >
                     {isForgotLoading ? "Sending..." : "Send Reset Link"}
                   </button>
@@ -520,8 +519,8 @@ export default function Home() {
   // 3. Loading State (DB Connection check)
   if (isConnected === null) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
-        <div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full"></div>
+      <main className="flex min-h-screen items-center justify-center bg-gray-900">
+        <div className="animate-spin h-8 w-8 border-4 border-accent border-t-transparent rounded-full"></div>
       </main>
     );
   }
@@ -533,10 +532,10 @@ export default function Home() {
 
   // 5. Not Connected or explicitly switching State -> Database Selection / Creation
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-6 bg-gray-50 dark:bg-gray-900 transition-colors duration-200 relative">
+    <main className="flex min-h-screen flex-col items-center justify-center p-6 bg-gray-900 relative">
       <button 
         onClick={() => supabase.auth.signOut()}
-        className="absolute top-6 right-6 flex items-center gap-2 p-2 bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-700 transition-colors text-gray-600 dark:text-gray-300 shadow-sm cursor-pointer"
+        className="absolute top-6 right-6 flex items-center gap-2 p-2 bg-gray-800 hover:bg-gray-700 rounded-xl border border-gray-700 transition-colors text-gray-300 shadow-sm cursor-pointer"
         title="Sign Out"
       >
         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -544,14 +543,14 @@ export default function Home() {
         </svg>
       </button>
 
-      <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-xl w-full max-w-lg border border-gray-200 dark:border-gray-700">
+      <div className="bg-gray-800 p-8 rounded-2xl shadow-xl w-full max-w-lg border border-gray-700">
         <div className="flex justify-center mb-6">
           <img src="/logo.svg" alt="Quera Logo" className="w-12 h-12 drop-shadow-sm" />
         </div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2 text-center">
+        <h1 className="text-2xl font-bold text-white mb-2 text-center">
           Your Databases
         </h1>
-        <p className="text-gray-500 dark:text-gray-400 mb-6 text-sm text-center">
+        <p className="text-gray-400 mb-6 text-sm text-center">
           Welcome back, {session.user.email}. Select a saved database or connect a new one.
         </p>
         
@@ -574,10 +573,10 @@ export default function Home() {
             ) : savedConnections.length > 0 ? (
               <ul className="space-y-3">
                 {savedConnections.map(conn => (
-                  <li key={conn.id} className="flex items-center justify-between p-4 border border-gray-200 dark:border-gray-700 rounded-xl hover:border-blue-300 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors cursor-pointer group bg-white dark:bg-gray-800" onClick={() => handleSelectConnection(conn.id)}>
+                  <li key={conn.id} className="flex items-center justify-between p-4 border border-gray-700 rounded-xl hover:border-secondary-hover/50 hover:bg-secondary/10 transition-colors cursor-pointer group bg-gray-800" onClick={() => handleSelectConnection(conn.id)}>
                     <div>
-                      <h3 className="font-semibold text-gray-900 dark:text-gray-100">{conn.name}</h3>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Saved {new Date(conn.created_at).toLocaleDateString()}</p>
+                      <h3 className="font-semibold text-gray-100">{conn.name}</h3>
+                      <p className="text-xs text-gray-400 mt-1">Saved {new Date(conn.created_at).toLocaleDateString()}</p>
                     </div>
                     <div className="flex items-center gap-4">
                       <button 
@@ -589,7 +588,7 @@ export default function Home() {
                           <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
                         </svg>
                       </button>
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-500" viewBox="0 0 20 20" fill="currentColor">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-accent" viewBox="0 0 20 20" fill="currentColor">
                         <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
                       </svg>
                     </div>
@@ -597,14 +596,14 @@ export default function Home() {
                 ))}
               </ul>
             ) : (
-              <div className="text-center text-gray-500 py-6 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 text-sm">
+              <div className="text-center text-gray-500 py-6 bg-gray-800/50 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 text-sm">
                 No saved databases found.
               </div>
             )}
             
             <button
               onClick={() => setShowNewForm(true)}
-              className="w-full mt-4 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 font-semibold py-3 px-4 rounded-xl transition-colors shadow-sm flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full mt-4 bg-gray-900 border border-gray-600 hover:bg-gray-700 text-gray-200 font-semibold py-3 px-4 rounded-xl transition-colors shadow-sm flex items-center justify-center gap-2 cursor-pointer"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
@@ -622,7 +621,7 @@ export default function Home() {
                 id="connString"
                 type="password"
                 placeholder="postgresql://user:password@host:port/dbname"
-                className="w-full px-4 py-2 font-mono bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+                className="w-full px-4 py-2 font-mono bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-accent focus:border-accent outline-none transition-all text-white placeholder-gray-500"
                 value={connectionString}
                 onChange={(e) => handleConnectionStringChange(e.target.value)}
                 autoComplete="new-password"
@@ -639,7 +638,7 @@ export default function Home() {
                 id="connName"
                 type="text"
                 placeholder="e.g. Production DB"
-                className="w-full px-4 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+                className="w-full px-4 py-2 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-accent focus:border-accent outline-none transition-all text-white placeholder-gray-500"
                 value={connectionName}
                 onChange={(e) => setConnectionName(e.target.value)}
                 autoComplete="off"
@@ -658,14 +657,14 @@ export default function Home() {
               <button
                 type="button"
                 onClick={() => { setShowNewForm(false); setErrorMessage(""); }}
-                className="flex-1 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 font-semibold py-2 px-4 rounded-lg transition-colors cursor-pointer"
+                className="flex-1 bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-600 font-semibold py-2 px-4 rounded-lg transition-colors cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="flex-[2] bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                className="flex-[2] bg-accent hover:bg-accent-hover text-white font-semibold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               >
                 {isSubmitting ? "Connecting..." : "Save & Connect"}
               </button>

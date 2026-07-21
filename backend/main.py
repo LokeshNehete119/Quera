@@ -25,7 +25,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 # lazy load sentence_transformers inside get_relevant_schema
 
 from google import genai
-from google.genai import types
+from google.genai import types, errors
 
 from supabase import create_client, Client
 
@@ -1064,6 +1064,18 @@ If the question is impossible to answer from this schema and doesn't relate to s
                 "chat_id": chat_id
             }
 
+    except errors.ClientError as e:
+        if e.code == 429:
+            reply = "🚫 Gemini's free tier is temporarily rate-limited. Please wait a moment and try again."
+            check_and_save_message(req.frontend_msg_id, app_conn, chat_id, 'system', reply)
+            app_conn.close()
+            user_conn.close()
+            return {"category": "read", "reply": reply, "chat_id": chat_id}
+        else:
+            print(f"Error in chat endpoint (Gemini API): {str(e)}")
+            app_conn.close()
+            user_conn.close()
+            raise HTTPException(status_code=500, detail="An error occurred while contacting the AI API.")
     except Exception as e:
         print(f"Error in chat endpoint: {str(e)}")
         app_conn.close()

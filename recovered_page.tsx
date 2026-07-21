@@ -57,14 +57,15 @@ export default function ResetPasswordPage() {
   if (isCheckingSession) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#0a0a0f] transition-colors duration-200">
-        <div className="animate-spin h-8 w-8 border-4 border-accent border-t-transparent rounded-full"></div>
+        <div className="animate-spin h-8 w-8 border-4 border-indigo-500 border-t-transparent rounded-full"></div>
       </main>
     );
   }
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-[#0a0a0f] relative overflow-hidden transition-colors duration-200">
-      {/* Radial Glow Background Removed */}
+      {/* Radial Glow Background */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-indigo-600/20 rounded-full blur-[100px] pointer-events-none mix-blend-screen opacity-70"></div>
       
       <div className="relative z-10 w-full max-w-md px-4 flex flex-col items-center">
         <div className="flex items-center justify-center gap-3 mb-10">
@@ -72,7 +73,7 @@ export default function ResetPasswordPage() {
           <span className="text-2xl font-bold text-white tracking-tight">Quera</span>
         </div>
 
-        <div className="bg-[#111118] border border-accent/20 p-8 rounded-2xl shadow-2xl w-full text-left">
+        <div className="bg-[#111118] border border-indigo-500/20 p-8 rounded-2xl shadow-2xl w-full text-left">
           <h2 className="text-2xl font-bold text-white mb-1">Set New Password</h2>
           <p className="text-gray-400 mb-8 text-sm">Please enter your new password below.</p>
 
@@ -98,7 +99,7 @@ export default function ResetPasswordPage() {
                   onChange={(e) => setNewPassword(e.target.value)}
                   placeholder="••••••••"
                   required
-                  className="w-full px-4 py-2.5 bg-[#0a0a0f] border border-gray-700/50 rounded-xl focus:ring-2 focus:ring-accent focus:border-accent outline-none transition-all text-white placeholder-gray-600"
+                  className="w-full px-4 py-2.5 bg-[#0a0a0f] border border-gray-700/50 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-white placeholder-gray-600"
                 />
                 <PasswordStrength password={newPassword} onValidationChange={setIsPasswordStrong} />
               </div>
@@ -111,14 +112,14 @@ export default function ResetPasswordPage() {
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="••••••••"
                   required
-                  className="w-full px-4 py-2.5 bg-[#0a0a0f] border border-gray-700/50 rounded-xl focus:ring-2 focus:ring-accent focus:border-accent outline-none transition-all text-white placeholder-gray-600"
+                  className="w-full px-4 py-2.5 bg-[#0a0a0f] border border-gray-700/50 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-white placeholder-gray-600"
                 />
               </div>
 
               <button
                 type="submit"
                 disabled={isLoading || !isPasswordStrong || newPassword !== confirmPassword || !newPassword}
-                className="w-full mt-2 bg-accent hover:bg-accent-hover text-white font-medium py-2.5 px-4 rounded-xl transition-colors shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full mt-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 px-4 rounded-xl transition-colors shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isLoading ? "Saving..." : "Update Password"}
               </button>
@@ -126,7 +127,7 @@ export default function ResetPasswordPage() {
           ) : (
             <button
               onClick={() => router.push("/")}
-              className="w-full mt-2 bg-accent hover:bg-accent-hover text-white font-medium py-2.5 px-4 rounded-xl transition-colors shadow-sm cursor-pointer"
+              className="w-full mt-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 px-4 rounded-xl transition-colors shadow-sm cursor-pointer"
             >
               Return to Sign In
             </button>

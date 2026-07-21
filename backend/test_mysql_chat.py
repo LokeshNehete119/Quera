@@ -19,8 +19,33 @@ def test_mysql_chat(message: str):
         port=3306,
         cursorclass=pymysql.cursors.DictCursor
     )
-    schema_str = get_db_schema(conn, "mysql")
+    msg_lower = message.lower()
     
+    INTENT_GUARD_KEYWORDS = ["db", "database", "table", "schema", "column", "data", "sql"]
+    WRITE_VERBS = ["delete", "drop", "create", "insert", "update", "remove", "rename", "truncate", "assign", "set", "replace", "archive", "restore", "fill", "make"]
+    CASUAL_PHRASES = ["explain", "suggest", "how to", "what is a ", "help me", "change the table"]
+    SCHEMA_BROAD_INTENT_KEYWORDS = ["everything", "all data", "my db", "my database", "what's in", "tell me about", "entire database", "summarize", "overview"]
+    
+    has_kw = any(kw in msg_lower for kw in INTENT_GUARD_KEYWORDS)
+    has_write = any(wv in msg_lower for wv in WRITE_VERBS)
+    has_casual = any(cp in msg_lower for cp in CASUAL_PHRASES)
+    
+    if has_kw and not has_write and not has_casual:
+        category = "read"
+        print(f"[INTENT CLASSIFIER] Message: '{message}' -> Forced Category: {category} (Source: Keyword Guard)")
+    else:
+        category = "casual" # Simulate misclassification for this specific query
+    
+    if any(kw in msg_lower for kw in SCHEMA_BROAD_INTENT_KEYWORDS):
+        print(f"[SCHEMA RETRIEVAL] Fallback: Broad intent keyword detected in query. Returning full schema.")
+        schema_str = get_db_schema(conn, "mysql")
+    else:
+        schema_str = "PARTIAL_SCHEMA_MOCK"
+    
+    if category == "casual":
+        print("Final Response: I don't have direct access to your personal systems.")
+        return
+        
     sql_instruct = f"""You are an expert SQL generator for a MySQL database.
 Here is the database schema:
 {schema_str}
@@ -31,6 +56,7 @@ CRITICAL MYSQL RULES:
 - Quote string literals with single quotes ('). Do not use double quotes.
 - Quote identifiers (tables/columns) with backticks (`), NOT double quotes.
 - Do not use PostgreSQL-specific syntax or functions.
+- If querying information_schema, you MUST filter by table_schema = DATABASE() to avoid returning internal system tables.
 If the question is completely unrelated to databases or the schema, generate exactly: SELECT 'IMPOSSIBLE' AS STATUS;"""
 
     response = client.models.generate_content(
@@ -67,6 +93,4 @@ If the question is completely unrelated to databases or the schema, generate exa
     conn.close()
 
 if __name__ == "__main__":
-    test_mysql_chat("count rows of table which has min columns with name")
-    test_mysql_chat("show 5 products and their prices")
-    test_mysql_chat("list all categories")
+    test_mysql_chat("tell me about my db")

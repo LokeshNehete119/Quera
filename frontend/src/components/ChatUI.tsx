@@ -31,7 +31,7 @@ type Message = {
   isStreaming?: boolean;
 };
 
-type Theme = "light" | "dark" | "system";
+
 
 const getSystemMessageType = (content: string) => {
   if (content.startsWith("✅")) return "success";
@@ -102,9 +102,9 @@ export default function ChatUI({ session, activeConnId, savedConnections, onSwit
   
   const [editingChatId, setEditingChatId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   
-  const [theme, setTheme] = useState<Theme>("system");
-  
+
   const [executingActionId, setExecutingActionId] = useState<string | null>(null);
 
   const [modalOpen, setModalOpen] = useState(false);
@@ -151,12 +151,6 @@ export default function ChatUI({ session, activeConnId, savedConnections, onSwit
     }
   };
 
-  useEffect(() => {
-    const savedTheme = localStorage.getItem("theme") as Theme;
-    if (savedTheme) {
-      setTheme(savedTheme);
-    }
-  }, []);
 
   useEffect(() => {
     if (activeConnId) {
@@ -166,14 +160,6 @@ export default function ChatUI({ session, activeConnId, savedConnections, onSwit
     }
   }, [activeConnId]);
 
-  useEffect(() => {
-    const root = window.document.documentElement;
-    root.classList.remove("dark");
-    if (theme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
-      root.classList.add("dark");
-    }
-    localStorage.setItem("theme", theme);
-  }, [theme]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -510,11 +496,6 @@ export default function ChatUI({ session, activeConnId, savedConnections, onSwit
     setEditingChatId(null);
   };
 
-  const nextTheme = () => {
-    if (theme === 'light') setTheme('dark');
-    else if (theme === 'dark') setTheme('system');
-    else setTheme('light');
-  };
 
   const startRenameConn = (e: React.MouseEvent, conn: any) => {
     e.stopPropagation();
@@ -580,38 +561,71 @@ export default function ChatUI({ session, activeConnId, savedConnections, onSwit
   };
 
   return (
-    <div className="flex h-screen w-full bg-gray-50 dark:bg-gray-900 overflow-hidden transition-colors duration-200">
+    <div className="flex h-screen w-full bg-gray-900 overflow-hidden">
       {/* Sidebar */}
-      <aside className="w-64 bg-gray-900 dark:bg-black text-white flex flex-col hidden md:flex border-r border-gray-800 transition-colors duration-200">
+      <aside className="w-64 bg-black text-white flex flex-col hidden md:flex border-r border-gray-800">
         <div className="p-5 flex items-center gap-3 border-b border-gray-800">
           <img src="/logo.svg" alt="Quera Logo" className="w-8 h-8 drop-shadow-sm" />
           <h1 className="text-xl font-bold tracking-tight">Quera</h1>
         </div>
-        <div className="p-4 flex flex-col gap-3 border-b border-gray-800">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 overflow-hidden">
-              <img src={session.user.user_metadata?.avatar_url || "https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y"} className="w-8 h-8 rounded-full" alt="avatar" />
-              <div className="text-sm truncate">
-                <p className="font-semibold truncate">{session.user.user_metadata?.full_name || "User"}</p>
-                <p className="text-xs text-gray-400 truncate">{session.user.email}</p>
-                {(!session.user.app_metadata?.providers || !session.user.app_metadata.providers.includes('email')) && (
-                  <button onClick={() => setSetPasswordModalOpen(true)} className="text-[10px] text-indigo-400 hover:text-indigo-300 mt-0.5 cursor-pointer font-medium transition-colors">Set password</button>
-                )}
+        <div className="p-4 flex flex-col gap-3 border-b border-gray-800 relative">
+          <button 
+            onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+            className="flex items-center justify-between p-2 -mx-2 hover:bg-gray-800/50 rounded-xl transition-colors cursor-pointer group"
+          >
+            <div className="flex items-center gap-2 overflow-hidden text-left">
+              <div className="w-8 h-8 rounded-full bg-secondary/20 text-secondary border border-secondary/30 flex items-center justify-center font-bold text-sm shadow-sm flex-shrink-0 group-hover:bg-secondary/30 transition-colors">
+                {(session.user.user_metadata?.full_name?.charAt(0) || session.user.email?.charAt(0) || "U").toUpperCase()}
+              </div>
+              <div className="text-sm truncate pr-2">
+                <p className="font-semibold truncate text-gray-200 group-hover:text-white transition-colors">{session.user.user_metadata?.full_name || "User"}</p>
+                <p className="text-xs text-gray-500 truncate">{session.user.email}</p>
               </div>
             </div>
-            <div className="flex items-center gap-1">
-              <button onClick={handleSwitchDatabase} className="text-gray-400 hover:text-white p-1 cursor-pointer" title="Switch Database">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                </svg>
-              </button>
-              <button onClick={() => supabase.auth.signOut()} className="text-gray-400 hover:text-white p-1 cursor-pointer" title="Sign Out">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                </svg>
-              </button>
-            </div>
-          </div>
+            <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 text-gray-500 transition-transform ${isProfileMenuOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          
+          {isProfileMenuOpen && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setIsProfileMenuOpen(false)}></div>
+              <div className="absolute top-full left-4 right-4 mt-2 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl z-50 overflow-hidden">
+                <div className="px-4 py-3 border-b border-gray-800 bg-gray-800/30">
+                  <p className="font-semibold text-sm text-white truncate">{session.user.user_metadata?.full_name || "User"}</p>
+                  <p className="text-xs text-gray-400 truncate">{session.user.email}</p>
+                </div>
+                
+                <div className="py-1">
+                  {(!session.user.app_metadata?.providers || !session.user.app_metadata.providers.includes('email')) && (
+                    <button 
+                      onClick={() => { setIsProfileMenuOpen(false); setSetPasswordModalOpen(true); }}
+                      className="w-full text-left px-4 py-2.5 text-sm text-secondary hover:bg-gray-800 hover:text-secondary-hover transition-colors flex items-center gap-2.5 cursor-pointer font-medium"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" /></svg>
+                      Set password
+                    </button>
+                  )}
+                  
+                  <button 
+                    onClick={() => { setIsProfileMenuOpen(false); handleSwitchDatabase(); }}
+                    className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-800 hover:text-white transition-colors flex items-center gap-2.5 cursor-pointer"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
+                    Switch database
+                  </button>
+                  
+                  <button 
+                    onClick={() => { setIsProfileMenuOpen(false); supabase.auth.signOut(); }}
+                    className="w-full text-left px-4 py-2.5 text-sm text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-colors flex items-center gap-2.5 cursor-pointer"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-red-400/80" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                    Sign out
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
           
           <div className="flex items-center justify-between">
             <button
@@ -623,28 +637,7 @@ export default function ChatUI({ session, activeConnId, savedConnections, onSwit
             </svg>
             New Chat
           </button>
-          
-          <button 
-            onClick={nextTheme}
-            className="ml-2 p-2 bg-gray-800 hover:bg-gray-700 rounded-xl border border-gray-700 transition-colors flex-shrink-0 text-gray-300 hover:text-white cursor-pointer"
-            title={`Theme: ${theme}`}
-          >
-            {theme === 'light' && (
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-              </svg>
-            )}
-            {theme === 'dark' && (
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-              </svg>
-            )}
-            {theme === 'system' && (
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-              </svg>
-            )}
-          </button>
+
         </div>
         </div>
         
@@ -663,14 +656,14 @@ export default function ChatUI({ session, activeConnId, savedConnections, onSwit
             {(!savedConnections || savedConnections.length === 0) ? (
               <div className="px-3 py-4 mx-2 bg-gray-800/50 rounded-lg border border-gray-700/50 text-center">
                 <p className="text-xs text-gray-400 mb-2">No databases connected yet</p>
-                <button onClick={handleSwitchDatabase} className="text-xs font-medium text-indigo-400 hover:text-indigo-300 transition-colors cursor-pointer">
+                <button onClick={handleSwitchDatabase} className="text-xs font-medium text-accent hover:text-accent-hover transition-colors cursor-pointer">
                   Connect one to get started
                 </button>
               </div>
             ) : (
               <ul className="space-y-1">
                 {savedConnections.map(conn => (
-                  <li key={conn.id} className={`group flex items-center justify-between px-2 py-2 rounded-lg cursor-pointer transition-colors ${activeConnId === conn.id ? 'bg-gray-800' : 'hover:bg-gray-800/50'}`} onClick={() => { if (conn.id !== activeConnId && onSelectConnection) onSelectConnection(conn.id) }}>
+                  <li key={conn.id} className={`group flex items-center justify-between px-2 py-2 rounded-lg cursor-pointer transition-colors border ${activeConnId === conn.id ? 'bg-secondary/10 border-secondary/20 text-secondary' : 'border-transparent hover:bg-gray-800/50'}`} onClick={() => { if (conn.id !== activeConnId && onSelectConnection) onSelectConnection(conn.id) }}>
                     {editingConnId === conn.id ? (
                       <form onSubmit={(e) => saveRenameConn(e, false)} className="flex-1 flex items-center gap-2">
                         <div className={`w-2 h-2 rounded-full flex-shrink-0 ${conn.db_type === 'postgres' ? 'bg-blue-500' : conn.db_type === 'mysql' ? 'bg-orange-400' : 'bg-gray-500'}`} />
@@ -685,7 +678,7 @@ export default function ChatUI({ session, activeConnId, savedConnections, onSwit
                               saveRenameConn(e, true);
                             }
                           }}
-                          className="flex-1 bg-gray-900 text-white text-sm px-2 py-0.5 rounded outline-none border border-gray-600 focus:border-blue-500"
+                          className="flex-1 bg-gray-900 text-white text-sm px-2 py-0.5 rounded outline-none border border-gray-600 focus:border-accent"
                           onClick={(e) => e.stopPropagation()}
                         />
                       </form>
@@ -734,7 +727,7 @@ export default function ChatUI({ session, activeConnId, savedConnections, onSwit
                           saveRename(e, true);
                         }
                       }}
-                      className="w-full bg-gray-700 text-white text-sm px-2 py-1 rounded outline-none border border-blue-500 focus:ring-1 focus:ring-blue-500"
+                      className="w-full bg-gray-700 text-white text-sm px-2 py-1 rounded outline-none border border-accent focus:ring-1 focus:ring-accent"
                     />
                   </form>
                 ) : (
@@ -767,29 +760,28 @@ export default function ChatUI({ session, activeConnId, savedConnections, onSwit
       </aside>
 
       {/* Main Chat Area */}
-      <main className="flex-1 flex flex-col bg-white dark:bg-[#0a0a0f] h-full overflow-hidden transition-colors duration-200">
+      <main className="flex-1 flex flex-col bg-[#0a0a0f] h-full overflow-hidden transition-colors duration-200">
         <div className="flex-1 overflow-y-auto p-4 md:p-6 flex flex-col">
           {isLoadingChat ? (
             <div className="flex-1 flex flex-col items-center justify-center">
-              <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+              <div className="w-8 h-8 border-4 border-accent border-t-transparent rounded-full animate-spin"></div>
             </div>
           ) : messages.length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center w-full relative bg-[#0a0a0f] overflow-hidden">
-              {/* Radial Glow Background */}
-              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-indigo-600/20 rounded-full blur-[100px] pointer-events-none mix-blend-screen opacity-70"></div>
+              {/* Radial Glow Background Removed */}
               
               <div className="max-w-2xl mx-auto w-full px-4 flex flex-col items-center relative z-10 mb-10">
                 <h1 className="text-4xl md:text-5xl font-semibold text-white tracking-tight mb-2 text-center">
                   Talk to your database.
                 </h1>
-                <div className="h-[2px] w-32 bg-gradient-to-r from-transparent via-indigo-500 to-transparent mb-6 opacity-80"></div>
+                <div className="h-[2px] w-32 bg-gradient-to-r from-transparent via-secondary to-transparent mb-6 opacity-80"></div>
                 
                 <p className="text-lg md:text-xl text-gray-400 text-center font-light">
                   Ask anything, in plain English
                 </p>
                 
                 {activeConnId && savedConnections && (
-                  <div className="mt-8 px-4 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-xs font-medium text-indigo-300 tracking-wide uppercase">
+                  <div className="mt-8 px-4 py-1.5 rounded-full bg-secondary/10 border border-secondary/20 text-xs font-medium text-secondary tracking-wide uppercase">
                     Connected: {savedConnections.find(c => c.id === activeConnId)?.name || "Database"}
                   </div>
                 )}
@@ -807,7 +799,9 @@ export default function ChatUI({ session, activeConnId, savedConnections, onSwit
                   {/* Avatar */}
                   <div className="flex-shrink-0 mt-1">
                     {msg.role === "user" ? (
-                      <img src={session.user.user_metadata?.avatar_url || "https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y"} className="w-8 h-8 rounded-full shadow-sm" alt="User Avatar" />
+                      <div className="w-8 h-8 rounded-full bg-secondary/20 text-secondary border border-secondary/30 flex items-center justify-center font-bold text-sm shadow-sm flex-shrink-0 mt-1">
+                        {(session.user.user_metadata?.full_name?.charAt(0) || session.user.email?.charAt(0) || "U").toUpperCase()}
+                      </div>
                     ) : msg.role === "ai" ? (
                       <img src="/logo.svg" className="w-8 h-8 rounded-full shadow-sm" alt="Quera AI" />
                     ) : (
@@ -842,9 +836,9 @@ export default function ChatUI({ session, activeConnId, savedConnections, onSwit
                           ? (getSystemMessageType(msg.content) === 'success' 
                               ? "bg-success/10 text-success border border-success/30 rounded-tl-sm font-medium"
                               : getSystemMessageType(msg.content) === 'neutral'
-                              ? "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-300 dark:border-gray-700 rounded-tl-sm font-medium"
+                              ? "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-700 rounded-tl-sm font-medium"
                               : "bg-danger/10 text-danger border border-danger/30 rounded-tl-sm font-medium")
-                          : "bg-surface text-foreground rounded-tl-sm border border-gray-300 dark:border-gray-700"
+                          : "bg-surface text-foreground rounded-tl-sm border border-gray-700"
                       }`}
                     >
                       <p className="whitespace-pre-wrap text-[15px] leading-relaxed">
@@ -858,9 +852,9 @@ export default function ChatUI({ session, activeConnId, savedConnections, onSwit
                     </div>
                     
                     {msg.data_json && !msg.isStreaming && (
-                      <div className="mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-xl overflow-hidden shadow-sm">
+                      <div className="mt-1 bg-gray-800 border border-gray-700 rounded-xl overflow-hidden shadow-sm">
                         <div className="overflow-x-auto max-w-full">
-                          <table className="w-full text-sm text-left text-gray-500 dark:text-gray-400">
+                          <table className="w-full text-sm text-left text-gray-400">
                             <thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700/50 dark:text-gray-300">
                               <tr>
                                 {msg.data_json.columns.map((col, idx) => (
@@ -870,7 +864,7 @@ export default function ChatUI({ session, activeConnId, savedConnections, onSwit
                             </thead>
                             <tbody>
                               {msg.data_json.rows.map((row, rIdx) => (
-                                <tr key={rIdx} className="border-b last:border-0 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                                <tr key={rIdx} className="border-b last:border-0 border-gray-700 hover:bg-gray-700/50 transition-colors">
                                   {row.map((val, cIdx) => (
                                     <td key={cIdx} className="px-4 py-2 whitespace-nowrap text-gray-900 dark:text-gray-200">
                                       {val !== null ? String(val) : <span className="text-gray-400 italic">null</span>}
@@ -882,7 +876,7 @@ export default function ChatUI({ session, activeConnId, savedConnections, onSwit
                           </table>
                         </div>
                         {msg.data_json.truncated && (
-                          <div className="bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 px-4 py-2 text-xs text-center text-gray-500 dark:text-gray-400 font-medium">
+                          <div className="bg-gray-50 dark:bg-gray-800 border-t border-gray-700 px-4 py-2 text-xs text-center text-gray-400 font-medium">
                             Showing 50 of many rows
                           </div>
                         )}
@@ -890,14 +884,14 @@ export default function ChatUI({ session, activeConnId, savedConnections, onSwit
                     )}
                     
                     {msg.sql && !msg.pendingAction && (
-                      <details className="text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg overflow-hidden mt-1">
-                        <summary className="cursor-pointer px-4 py-2 font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors list-none flex items-center gap-2 select-none">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-blue-500" viewBox="0 0 20 20" fill="currentColor">
+                      <details className="text-sm bg-gray-800 border border-gray-700 rounded-lg overflow-hidden mt-1">
+                        <summary className="cursor-pointer px-4 py-2 font-medium text-gray-300 hover:bg-gray-700 transition-colors list-none flex items-center gap-2 select-none">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-accent" viewBox="0 0 20 20" fill="currentColor">
                             <path fillRule="evenodd" d="M12.316 3.051a1 1 0 01.633 1.265l-4 12a1 1 0 11-1.898-.632l4-12a1 1 0 011.265-.633zM5.707 6.293a1 1 0 010 1.414L3.414 10l2.293 2.293a1 1 0 11-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0zm8.586 0a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 11-1.414-1.414L16.586 10l-2.293-2.293a1 1 0 010-1.414z" clipRule="evenodd" />
                           </svg>
                           Show SQL Query
                         </summary>
-                        <div className="border-t border-gray-200 dark:border-gray-700 overflow-x-auto rounded-b-lg">
+                        <div className="border-t border-gray-700 overflow-x-auto rounded-b-lg">
                           {msg.isStreaming ? (
                              <div className="p-4 bg-[#282c34] text-gray-100"><pre className="font-mono text-xs whitespace-pre">{msg.sql}</pre></div>
                           ) : (
@@ -939,7 +933,7 @@ export default function ChatUI({ session, activeConnId, savedConnections, onSwit
                           </SyntaxHighlighter>
                         </div>
 
-                        <div className="p-4 bg-surface border-t border-gray-200 dark:border-gray-700 flex flex-col gap-3">
+                        <div className="p-4 bg-surface border-t border-gray-700 flex flex-col gap-3">
                           {msg.pendingAction.isDestructive && msg.actionStatus === "pending" && (
                             <div className="bg-warning/10 border border-warning/30 rounded-lg p-3">
                               <label className="block text-xs font-bold text-warning uppercase tracking-wide mb-2">
@@ -969,7 +963,7 @@ export default function ChatUI({ session, activeConnId, savedConnections, onSwit
                             <button
                               onClick={() => handleAction(msg.id, msg.pendingAction!.actionId, "reject", false)}
                               disabled={msg.actionStatus !== "pending" || executingActionId === msg.pendingAction!.actionId}
-                              className="flex-1 bg-transparent hover:bg-gray-100 dark:hover:bg-gray-800 disabled:bg-gray-100 dark:disabled:bg-gray-900 disabled:text-gray-400 dark:disabled:text-gray-600 text-foreground border border-gray-300 dark:border-gray-700 font-semibold py-2 px-4 rounded-xl transition-colors text-sm h-10 cursor-pointer disabled:cursor-not-allowed"
+                              className="flex-1 bg-transparent hover:bg-gray-100 dark:hover:bg-gray-800 disabled:bg-gray-100 dark:disabled:bg-gray-900 disabled:text-gray-400 dark:disabled:text-gray-600 text-foreground border border-gray-700 font-semibold py-2 px-4 rounded-xl transition-colors text-sm h-10 cursor-pointer disabled:cursor-not-allowed"
                             >
                               {msg.actionStatus === "rejected" ? "Cancelled" : "Reject"}
                             </button>
@@ -984,14 +978,14 @@ export default function ChatUI({ session, activeConnId, savedConnections, onSwit
               {isTyping && (
                 <div className="flex justify-start">
                   <div className="flex items-center gap-3">
-                    <div className="bg-gray-100 dark:bg-gray-800 rounded-2xl rounded-bl-none px-5 py-4 flex items-center gap-1.5 border border-gray-200 dark:border-gray-700 shadow-sm">
-                      <div className="w-2 h-2 bg-gray-400 dark:bg-gray-500 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-                      <div className="w-2 h-2 bg-gray-400 dark:bg-gray-500 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-                      <div className="w-2 h-2 bg-gray-400 dark:bg-gray-500 rounded-full animate-bounce"></div>
+                    <div className="bg-gray-100 dark:bg-gray-800 rounded-2xl rounded-bl-none px-5 py-4 flex items-center gap-1.5 border border-gray-700 shadow-sm">
+                      <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                      <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                      <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></div>
                     </div>
                     <button 
                       onClick={() => abortControllerRef.current?.abort("user_cancelled")}
-                      className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-full transition-colors flex items-center gap-1 cursor-pointer"
+                      className="text-xs text-gray-400 hover:text-gray-200 px-3 py-1.5 border border-gray-600 rounded-full transition-colors flex items-center gap-1 cursor-pointer"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1007,9 +1001,9 @@ export default function ChatUI({ session, activeConnId, savedConnections, onSwit
           )}
         </div>
 
-        <div className={`flex-shrink-0 bg-white dark:bg-transparent pt-2 px-4 transition-colors duration-200 z-10 ${messages.length === 0 ? 'pb-16 md:pb-24' : 'pb-6'}`}>
+        <div className={`flex-shrink-0 bg-transparent pt-2 px-4 transition-colors duration-200 z-10 ${messages.length === 0 ? 'pb-16 md:pb-24' : 'pb-6'}`}>
           <div className="max-w-3xl mx-auto flex flex-col items-center relative">
-            <div className="w-full flex flex-col bg-[#111118] border border-indigo-500/20 rounded-[16px] shadow-lg focus-within:border-indigo-500/50 transition-all p-2 relative">
+            <div className="w-full flex flex-col bg-[#111118] border border-accent/20 rounded-[16px] shadow-lg focus-within:border-accent/50 transition-all p-2 relative">
               <textarea
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
@@ -1023,7 +1017,7 @@ export default function ChatUI({ session, activeConnId, savedConnections, onSwit
                 <button
                   onClick={() => handleSend()}
                   disabled={!inputValue.trim() || isTyping}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl disabled:bg-gray-800 disabled:text-gray-500 transition-colors cursor-pointer disabled:cursor-not-allowed flex items-center gap-2 text-sm font-medium"
+                  className="px-4 py-2 bg-accent hover:bg-accent-hover text-white rounded-xl disabled:bg-gray-800 disabled:text-gray-500 transition-colors cursor-pointer disabled:cursor-not-allowed flex items-center gap-2 text-sm font-medium"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                     <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
@@ -1055,9 +1049,9 @@ export default function ChatUI({ session, activeConnId, savedConnections, onSwit
       {/* Set Password Modal */}
       {setPasswordModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-md p-6 shadow-2xl border border-gray-200 dark:border-gray-700">
+          <div className="bg-gray-800 rounded-2xl w-full max-w-md p-6 shadow-2xl border border-gray-700">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Set a Password</h3>
+              <h3 className="text-lg font-semibold text-white">Set a Password</h3>
               <button 
                 onClick={() => { setSetPasswordModalOpen(false); setPasswordError(""); }} 
                 className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors cursor-pointer"
@@ -1066,7 +1060,7 @@ export default function ChatUI({ session, activeConnId, savedConnections, onSwit
               </button>
             </div>
             
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+            <p className="text-sm text-gray-400 mb-6">
               Adding a password allows you to sign in using your email address and password, as an alternative to Google. You'll still retain all your saved databases and chats.
             </p>
             
@@ -1078,40 +1072,40 @@ export default function ChatUI({ session, activeConnId, savedConnections, onSwit
             
             <form onSubmit={handleSetPassword} className="flex flex-col gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">New Password</label>
+                <label className="block text-sm font-medium text-gray-300 mb-1">New Password</label>
                 <input
                   type="password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   placeholder="••••••••"
                   required
-                  className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-gray-900 dark:text-white"
+                  className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg focus:ring-2 focus:ring-accent focus:border-accent outline-none transition-all text-white"
                 />
                 <PasswordStrength password={newPassword} onValidationChange={setIsPasswordStrong} />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Confirm Password</label>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Confirm Password</label>
                 <input
                   type="password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="••••••••"
                   required
-                  className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-gray-900 dark:text-white"
+                  className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg focus:ring-2 focus:ring-accent focus:border-accent outline-none transition-all text-white"
                 />
               </div>
               <div className="flex justify-end gap-3 mt-4">
                 <button
                   type="button"
                   onClick={() => { setSetPasswordModalOpen(false); setPasswordError(""); }}
-                  className="px-4 py-2 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer"
+                  className="px-4 py-2 rounded-lg text-sm font-medium text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSettingPassword || !newPassword || !confirmPassword || !isPasswordStrong || newPassword !== confirmPassword}
-                  className="px-4 py-2 rounded-lg text-sm font-medium bg-indigo-600 hover:bg-indigo-700 text-white transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                  className="px-4 py-2 rounded-lg text-sm font-medium bg-accent hover:bg-accent-hover text-white transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
                 >
                   {isSettingPassword ? "Saving..." : "Save Password"}
                 </button>
