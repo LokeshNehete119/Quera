@@ -862,6 +862,7 @@ Here is the database schema:
 
 Generate a single valid SELECT query that answers the user's question. 
 You may query the tables listed in the schema, or standard PostgreSQL system catalogs (like information_schema) if the user asks metadata questions about the database itself.
+CRITICAL RULE: If querying information_schema, you MUST filter by table_schema = 'public' to avoid returning internal pg_catalog or system tables.
 If the question is completely unrelated to databases or the schema, generate exactly: SELECT 'IMPOSSIBLE' AS STATUS;"""
             elif db_type == "mysql":
                 sql_instruct = f"""You are an expert SQL generator for a MySQL database.
@@ -874,6 +875,7 @@ CRITICAL MYSQL RULES:
 - Quote string literals with single quotes ('). Do not use double quotes.
 - Quote identifiers (tables/columns) with backticks (`), NOT double quotes.
 - Do not use PostgreSQL-specific syntax or functions.
+- If querying information_schema, you MUST filter by table_schema = DATABASE() to avoid returning internal system tables.
 If the question is completely unrelated to databases or the schema, generate exactly: SELECT 'IMPOSSIBLE' AS STATUS;"""
             
             t0 = time.time()

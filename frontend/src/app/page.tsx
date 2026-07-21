@@ -5,6 +5,7 @@ import ChatUI from "@/components/ChatUI";
 import { supabase } from "@/lib/supabaseClient";
 import { Session } from "@supabase/supabase-js";
 import ConfirmModal from "@/components/ConfirmModal";
+import PasswordStrength from "@/components/PasswordStrength";
 
 type DBConnection = {
   id: string;
@@ -16,7 +17,24 @@ type DBConnection = {
 export default function Home() {
   const [session, setSession] = useState<Session | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
+  
+  // Auth state
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [authError, setAuthError] = useState("");
+  const [authFormLoading, setAuthFormLoading] = useState(false);
+  const [isPasswordStrong, setIsPasswordStrong] = useState(false);
 
+  // Forgot password state
+  const [forgotModalOpen, setForgotModalOpen] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotMessage, setForgotMessage] = useState("");
+  const [forgotError, setForgotError] = useState("");
+  const [isForgotLoading, setIsForgotLoading] = useState(false);
+
+  // DB Connections state
   const [isConnected, setIsConnected] = useState<boolean | null>(null);
   const [activeConnId, setActiveConnId] = useState<string | null>(null);
   const [isSelectingDB, setIsSelectingDB] = useState(false);
@@ -132,6 +150,55 @@ export default function Home() {
       console.error("Failed to fetch connections", err);
     } finally {
       setIsLoadingConnections(false);
+    }
+  };
+
+  const handleEmailAuth = async (e: FormEvent) => {
+    e.preventDefault();
+    setAuthError("");
+    setAuthFormLoading(true);
+    try {
+      if (isSignUp) {
+        if (password !== confirmPassword) {
+          setAuthError("Passwords do not match.");
+          setAuthFormLoading(false);
+          return;
+        }
+        const { error } = await supabase.auth.signUp({ email, password });
+        if (error) setAuthError(error.message);
+        else setAuthError("Check your email for the confirmation link.");
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) setAuthError(error.message);
+      }
+    } catch (err: any) {
+      setAuthError(err.message || "Authentication failed");
+    } finally {
+      setAuthFormLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async (e: FormEvent) => {
+    e.preventDefault();
+    setForgotError("");
+    setForgotMessage("");
+    setIsForgotLoading(true);
+    try {
+      const { data, error } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
+        redirectTo: 'https://quera-nine.vercel.app/reset-password'
+      });
+      if (error) {
+        console.log("Supabase API Error Object:", JSON.stringify(error, Object.getOwnPropertyNames(error)));
+        // If error.message is literally rendering as {}, maybe it is an object itself. Let's make sure it falls back to stringifying it cleanly if it's not a string.
+        setForgotError(typeof error.message === 'string' ? error.message : JSON.stringify(error.message) || "Unknown error");
+      } else {
+        setForgotMessage("Check your email for a reset link.");
+      }
+    } catch (err: any) {
+      console.log("Catch Block Error Object:", JSON.stringify(err, Object.getOwnPropertyNames(err)));
+      setForgotError(typeof err.message === 'string' ? err.message : JSON.stringify(err.message) || "An unexpected error occurred.");
+    } finally {
+      setIsForgotLoading(false);
     }
   };
 
@@ -258,29 +325,194 @@ export default function Home() {
   // 2. Auth Gate (Not signed in)
   if (!session) {
     return (
-      <main className="flex min-h-screen flex-col items-center justify-center p-24 bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
-        <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-xl w-full max-w-sm text-center border border-gray-200 dark:border-gray-700">
-          <img src="/logo.svg" alt="Quera Logo" className="w-16 h-16 mx-auto mb-6 drop-shadow-md" />
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-            Welcome to Quera
+      <main className="flex min-h-screen flex-col items-center justify-center bg-[#0a0a0f] relative overflow-hidden transition-colors duration-200">
+        {/* Radial Glow Background */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-indigo-600/20 rounded-full blur-[100px] pointer-events-none mix-blend-screen opacity-70"></div>
+        
+        <div className="relative z-10 w-full max-w-md px-4 flex flex-col items-center">
+          <div className="flex items-center justify-center gap-3 mb-10">
+            <img src="/logo.svg" alt="Quera Logo" className="w-10 h-10 drop-shadow-md" />
+            <span className="text-2xl font-bold text-white tracking-tight">Quera</span>
+          </div>
+
+          <h1 className="text-3xl font-bold text-white mb-3 text-center tracking-tight">
+            Talk to your database. <span className="relative whitespace-nowrap"><span className="relative z-10">No SQL required.</span><span className="absolute left-0 bottom-1 w-full h-[3px] bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full"></span></span>
           </h1>
-          <p className="text-gray-500 dark:text-gray-400 mb-8 text-sm">
-            Sign in to securely access and manage your database chats.
+          <p className="text-gray-400 mb-8 text-center text-sm leading-relaxed max-w-sm">
+            Connect your PostgreSQL or MySQL database and query it in natural language — every write reviewed before it runs.
           </p>
-          
-          <button
-            onClick={handleGoogleSignIn}
-            className="w-full flex items-center justify-center gap-3 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200 font-semibold py-3 px-4 rounded-xl transition-colors shadow-sm cursor-pointer"
-          >
-            <svg className="w-5 h-5" viewBox="0 0 24 24">
-              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-            </svg>
-            Continue with Google
-          </button>
+
+          <div className="bg-[#111118] border border-indigo-500/20 p-8 rounded-2xl shadow-2xl w-full text-left">
+            <h2 className="text-2xl font-bold text-white mb-1">
+              {isSignUp ? "Create an account" : "Welcome back"}
+            </h2>
+            <p className="text-gray-400 mb-6 text-sm">
+              {isSignUp ? "Sign up to start chatting with your database." : "Sign in to securely access your database chats."}
+            </p>
+            
+            {authError && (
+              <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 text-red-400 text-sm rounded-lg">
+                {authError}
+              </div>
+            )}
+            
+            <form onSubmit={handleEmailAuth} className="flex flex-col gap-4 mb-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1.5">Email Address</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="name@example.com"
+                  required
+                  className="w-full px-4 py-2.5 bg-[#0a0a0f] border border-gray-700/50 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-white placeholder-gray-600"
+                />
+              </div>
+              <div>
+                <div className="flex justify-between items-center mb-1.5">
+                  <label className="block text-sm font-medium text-gray-300">Password</label>
+                  {!isSignUp && (
+                    <button 
+                      type="button"
+                      onClick={() => { setForgotEmail(email); setForgotModalOpen(true); }}
+                      className="text-sm font-medium text-indigo-400 hover:text-indigo-300 transition-colors cursor-pointer"
+                    >
+                      Forgot password?
+                    </button>
+                  )}
+                </div>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                  className="w-full px-4 py-2.5 bg-[#0a0a0f] border border-gray-700/50 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-white placeholder-gray-600"
+                />
+                {isSignUp && (
+                  <PasswordStrength password={password} onValidationChange={setIsPasswordStrong} />
+                )}
+              </div>
+              
+              {isSignUp && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1.5">Confirm Password</label>
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                    className="w-full px-4 py-2.5 bg-[#0a0a0f] border border-gray-700/50 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-white placeholder-gray-600"
+                  />
+                </div>
+              )}
+              
+              <button
+                type="submit"
+                disabled={authFormLoading || (isSignUp && (!isPasswordStrong || password !== confirmPassword))}
+                className="w-full mt-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 px-4 rounded-xl transition-colors shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {authFormLoading ? "Please wait..." : (isSignUp ? "Create account" : "Sign in")}
+              </button>
+            </form>
+
+            <div className="relative flex items-center justify-center mb-6">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-800"></div>
+              </div>
+              <div className="relative px-4 bg-[#111118] text-xs text-gray-500 uppercase tracking-widest">
+                Or continue with
+              </div>
+            </div>
+
+            <button
+              onClick={handleGoogleSignIn}
+              type="button"
+              className="w-full flex items-center justify-center gap-3 bg-[#0a0a0f] border border-gray-700/50 hover:bg-gray-800 text-gray-300 font-medium py-2.5 px-4 rounded-xl transition-colors shadow-sm cursor-pointer mb-6"
+            >
+              <svg className="w-5 h-5" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+              </svg>
+              Google
+            </button>
+
+            <p className="text-center text-sm text-gray-400">
+              {isSignUp ? "Already have an account?" : "No account?"}
+              <button 
+                onClick={() => { setIsSignUp(!isSignUp); setAuthError(""); }} 
+                className="ml-1.5 text-indigo-400 hover:text-indigo-300 font-medium transition-colors cursor-pointer"
+              >
+                {isSignUp ? "Sign in" : "Create one"}
+              </button>
+            </p>
+          </div>
         </div>
+
+        {/* Forgot Password Modal */}
+        {forgotModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+            <div className="bg-[#111118] rounded-2xl w-full max-w-md p-6 shadow-2xl border border-gray-800">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold text-white">Reset Password</h3>
+                <button 
+                  onClick={() => { setForgotModalOpen(false); setForgotError(""); setForgotMessage(""); }} 
+                  className="text-gray-400 hover:text-white transition-colors cursor-pointer"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+              
+              <p className="text-sm text-gray-400 mb-6">
+                Enter your email and we'll send you a link to reset your password.
+              </p>
+              
+              {forgotError && (
+                <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 text-red-400 text-sm rounded-lg">
+                  {forgotError}
+                </div>
+              )}
+              {forgotMessage && (
+                <div className="mb-4 p-3 bg-green-500/10 border border-green-500/30 text-green-400 text-sm rounded-lg">
+                  {forgotMessage}
+                </div>
+              )}
+              
+              <form onSubmit={handleForgotPassword} className="flex flex-col gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">Email Address</label>
+                  <input
+                    type="email"
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                    placeholder="name@example.com"
+                    required
+                    className="w-full px-3 py-2 bg-[#0a0a0f] border border-gray-700/50 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-white placeholder-gray-600"
+                  />
+                </div>
+                <div className="flex justify-end gap-3 mt-4">
+                  <button
+                    type="button"
+                    onClick={() => { setForgotModalOpen(false); setForgotError(""); setForgotMessage(""); }}
+                    className="px-4 py-2 rounded-xl text-sm font-medium text-gray-400 hover:text-white hover:bg-gray-800 transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isForgotLoading || !forgotEmail}
+                    className="px-4 py-2 rounded-xl text-sm font-medium bg-indigo-600 hover:bg-indigo-700 text-white transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                  >
+                    {isForgotLoading ? "Sending..." : "Send Reset Link"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </main>
     );
   }

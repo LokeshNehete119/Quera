@@ -79,7 +79,9 @@ const TypewriterText = ({
 
 import { Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabaseClient";
+import DOMPurify from 'dompurify';
 import ConfirmModal from "./ConfirmModal";
+import PasswordStrength from "./PasswordStrength";
 
 // ... previous type definitions ...
 
@@ -112,6 +114,42 @@ export default function ChatUI({ session, activeConnId, savedConnections, onSwit
   const [editConnTitle, setEditConnTitle] = useState("");
   const [connModalOpen, setConnModalOpen] = useState(false);
   const [connToDelete, setConnToDelete] = useState<string | null>(null);
+
+  const [setPasswordModalOpen, setSetPasswordModalOpen] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [isSettingPassword, setIsSettingPassword] = useState(false);
+  const [isPasswordStrong, setIsPasswordStrong] = useState(false);
+  
+  const handleSetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPassword.length < 6) {
+      setPasswordError("Password should be at least 6 characters.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError("Passwords do not match.");
+      return;
+    }
+    setPasswordError("");
+    setIsSettingPassword(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) {
+        setPasswordError(error.message);
+      } else {
+        setSetPasswordModalOpen(false);
+        setNewPassword("");
+        setConfirmPassword("");
+        // Session automatically updates with new identity, no sign-out needed
+      }
+    } catch (err: any) {
+      setPasswordError(err.message || "An unexpected error occurred.");
+    } finally {
+      setIsSettingPassword(false);
+    }
+  };
 
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme") as Theme;
@@ -556,6 +594,9 @@ export default function ChatUI({ session, activeConnId, savedConnections, onSwit
               <div className="text-sm truncate">
                 <p className="font-semibold truncate">{session.user.user_metadata?.full_name || "User"}</p>
                 <p className="text-xs text-gray-400 truncate">{session.user.email}</p>
+                {(!session.user.app_metadata?.providers || !session.user.app_metadata.providers.includes('email')) && (
+                  <button onClick={() => setSetPasswordModalOpen(true)} className="text-[10px] text-indigo-400 hover:text-indigo-300 mt-0.5 cursor-pointer font-medium transition-colors">Set password</button>
+                )}
               </div>
             </div>
             <div className="flex items-center gap-1">
@@ -726,77 +767,34 @@ export default function ChatUI({ session, activeConnId, savedConnections, onSwit
       </aside>
 
       {/* Main Chat Area */}
-      <main className="flex-1 flex flex-col bg-white dark:bg-gray-900 h-full overflow-hidden transition-colors duration-200">
+      <main className="flex-1 flex flex-col bg-white dark:bg-[#0a0a0f] h-full overflow-hidden transition-colors duration-200">
         <div className="flex-1 overflow-y-auto p-4 md:p-6 flex flex-col">
           {isLoadingChat ? (
             <div className="flex-1 flex flex-col items-center justify-center">
               <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
             </div>
           ) : messages.length === 0 ? (
-            <div className="flex-1 flex flex-col items-center justify-center text-gray-500 dark:text-gray-400 w-full relative">
-              {/* Background schema-graph motif */}
-              <div className="absolute inset-0 z-0 pointer-events-none opacity-[0.06] text-indigo-500 dark:text-indigo-400 flex items-center justify-center overflow-hidden">
-                <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
-                  <defs>
-                    <pattern id="schema-pattern" x="0" y="0" width="100" height="100" patternUnits="userSpaceOnUse">
-                      <circle cx="20" cy="20" r="3" fill="currentColor"/>
-                      <circle cx="80" cy="50" r="3" fill="currentColor"/>
-                      <circle cx="40" cy="80" r="3" fill="currentColor"/>
-                      <path d="M20 20 L80 50 L40 80 Z" stroke="currentColor" strokeWidth="1" fill="none"/>
-                      <rect x="10" y="25" width="20" height="10" stroke="currentColor" strokeWidth="1" fill="none" rx="2"/>
-                      <rect x="70" y="55" width="20" height="10" stroke="currentColor" strokeWidth="1" fill="none" rx="2"/>
-                      <rect x="30" y="85" width="20" height="10" stroke="currentColor" strokeWidth="1" fill="none" rx="2"/>
-                    </pattern>
-                  </defs>
-                  <rect x="0" y="0" width="100%" height="100%" fill="url(#schema-pattern)"/>
-                </svg>
-              </div>
-
-              <div className="max-w-2xl mx-auto w-full px-4 flex flex-col items-center relative z-10">
-                <img src="/logo.svg" alt="Quera Logo" className="w-16 h-16 mb-6 drop-shadow-md" />
+            <div className="flex-1 flex flex-col items-center justify-center w-full relative bg-[#0a0a0f] overflow-hidden">
+              {/* Radial Glow Background */}
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-indigo-600/20 rounded-full blur-[100px] pointer-events-none mix-blend-screen opacity-70"></div>
+              
+              <div className="max-w-2xl mx-auto w-full px-4 flex flex-col items-center relative z-10 mb-10">
+                <h1 className="text-4xl md:text-5xl font-semibold text-white tracking-tight mb-2 text-center">
+                  Talk to your database.
+                </h1>
+                <div className="h-[2px] w-32 bg-gradient-to-r from-transparent via-indigo-500 to-transparent mb-6 opacity-80"></div>
+                
+                <p className="text-lg md:text-xl text-gray-400 text-center font-light">
+                  Ask anything, in plain English
+                </p>
                 
                 {activeConnId && savedConnections && (
-                  <p className="text-sm font-medium text-indigo-500 dark:text-indigo-400 mb-2 tracking-wide uppercase">
-                    Connected to {savedConnections.find(c => c.id === activeConnId)?.name || "Database"}
-                  </p>
+                  <div className="mt-8 px-4 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-xs font-medium text-indigo-300 tracking-wide uppercase">
+                    Connected: {savedConnections.find(c => c.id === activeConnId)?.name || "Database"}
+                  </div>
                 )}
-                
-                <h2 className="text-2xl font-medium text-gray-800 dark:text-gray-200 mb-8 text-center">
-                  What would you like to know, {session.user.user_metadata?.full_name?.split(' ')[0] || 'there'}?
-                </h2>
-              
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full">
-                <button 
-                  onClick={() => handleSend("Show me all tables in the database")}
-                  className="p-4 border border-gray-300 dark:border-gray-700 rounded-2xl text-left hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
-                >
-                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Show me my tables</p>
-                  <p className="text-xs text-gray-400 mt-1">List all available tables</p>
-                </button>
-                <button 
-                  onClick={() => handleSend("Count the number of rows in the largest table")}
-                  className="p-4 border border-gray-300 dark:border-gray-700 rounded-2xl text-left hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
-                >
-                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Count rows in a table</p>
-                  <p className="text-xs text-gray-400 mt-1">Get the total record count</p>
-                </button>
-                <button 
-                  onClick={() => handleSend("Create a new table for storing user feedback with an id, user_id, rating, and comment")}
-                  className="p-4 border border-gray-300 dark:border-gray-700 rounded-2xl text-left hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
-                >
-                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Create a new table</p>
-                  <p className="text-xs text-gray-400 mt-1">Define a schema for new data</p>
-                </button>
-                <button 
-                  onClick={() => handleSend("Show me the most recently added records in the database")}
-                  className="p-4 border border-gray-300 dark:border-gray-700 rounded-2xl text-left hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
-                >
-                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">View recent records</p>
-                  <p className="text-xs text-gray-400 mt-1">See the latest data entries</p>
-                </button>
               </div>
             </div>
-          </div>
           ) : (
             <div className="max-w-3xl mx-auto w-full space-y-6">
               {messages.map((msg) => (
@@ -1009,31 +1007,32 @@ export default function ChatUI({ session, activeConnId, savedConnections, onSwit
           )}
         </div>
 
-        <div className="flex-shrink-0 bg-white dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800 pt-4 pb-6 px-4 transition-colors duration-200">
-          <div className="max-w-3xl mx-auto relative">
-            <div className="relative flex items-end bg-white dark:bg-gray-800 border border-gray-400 dark:border-gray-700 rounded-2xl shadow-sm focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 overflow-hidden transition-all">
+        <div className={`flex-shrink-0 bg-white dark:bg-transparent pt-2 px-4 transition-colors duration-200 z-10 ${messages.length === 0 ? 'pb-16 md:pb-24' : 'pb-6'}`}>
+          <div className="max-w-3xl mx-auto flex flex-col items-center relative">
+            <div className="w-full flex flex-col bg-[#111118] border border-indigo-500/20 rounded-[16px] shadow-lg focus-within:border-indigo-500/50 transition-all p-2 relative">
               <textarea
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="Message Quera..."
-                className="w-full max-h-32 min-h-[56px] resize-none py-4 pl-4 pr-12 bg-transparent outline-none text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
+                className="w-full max-h-32 min-h-[56px] resize-none py-3 px-4 bg-transparent outline-none text-white placeholder-gray-500 text-base"
                 rows={1}
                 disabled={isTyping}
               />
-              <button
-                onClick={() => handleSend()}
-                disabled={!inputValue.trim() || isTyping}
-                className="absolute right-2 bottom-2 p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl disabled:bg-gray-300 dark:disabled:bg-gray-700 disabled:text-gray-500 dark:disabled:text-gray-500 transition-colors cursor-pointer disabled:cursor-not-allowed"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M3.293 9.707a1 1 0 010-1.414l6-6a1 1 0 011.414 0l6 6a1 1 0 01-1.414 1.414L11 5.414V17a1 1 0 11-2 0V5.414L4.707 9.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                </svg>
-              </button>
+              <div className="flex justify-end items-end mt-2 px-2 pb-1">
+                <button
+                  onClick={() => handleSend()}
+                  disabled={!inputValue.trim() || isTyping}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl disabled:bg-gray-800 disabled:text-gray-500 transition-colors cursor-pointer disabled:cursor-not-allowed flex items-center gap-2 text-sm font-medium"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
+                  </svg>
+                  Send
+                </button>
+              </div>
             </div>
-            <p className="text-center text-xs text-gray-400 dark:text-gray-500 mt-2">
-              Press Enter to send, Shift + Enter for a new line.
-            </p>
+
           </div>
         </div>
       </main>
@@ -1052,6 +1051,75 @@ export default function ChatUI({ session, activeConnId, savedConnections, onSwit
         onConfirm={confirmDeleteConn}
         onCancel={() => setConnModalOpen(false)}
       />
+      
+      {/* Set Password Modal */}
+      {setPasswordModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-md p-6 shadow-2xl border border-gray-200 dark:border-gray-700">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Set a Password</h3>
+              <button 
+                onClick={() => { setSetPasswordModalOpen(false); setPasswordError(""); }} 
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors cursor-pointer"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+              Adding a password allows you to sign in using your email address and password, as an alternative to Google. You'll still retain all your saved databases and chats.
+            </p>
+            
+            {passwordError && (
+              <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 text-sm rounded-lg">
+                {passwordError}
+              </div>
+            )}
+            
+            <form onSubmit={handleSetPassword} className="flex flex-col gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">New Password</label>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                  className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-gray-900 dark:text-white"
+                />
+                <PasswordStrength password={newPassword} onValidationChange={setIsPasswordStrong} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Confirm Password</label>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                  className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-gray-900 dark:text-white"
+                />
+              </div>
+              <div className="flex justify-end gap-3 mt-4">
+                <button
+                  type="button"
+                  onClick={() => { setSetPasswordModalOpen(false); setPasswordError(""); }}
+                  className="px-4 py-2 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSettingPassword || !newPassword || !confirmPassword || !isPasswordStrong || newPassword !== confirmPassword}
+                  className="px-4 py-2 rounded-lg text-sm font-medium bg-indigo-600 hover:bg-indigo-700 text-white transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                >
+                  {isSettingPassword ? "Saving..." : "Save Password"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

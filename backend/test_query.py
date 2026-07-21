@@ -23,6 +23,7 @@ Here is the database schema:
 
 Generate a single valid SELECT query that answers the user's question. 
 You may query the tables listed in the schema, or standard PostgreSQL system catalogs (like information_schema) if the user asks metadata questions about the database itself.
+CRITICAL RULE: If querying information_schema, you MUST filter by table_schema = 'public' to avoid returning internal pg_catalog or system tables.
 If the question is completely unrelated to databases or the schema, generate exactly: SELECT 'IMPOSSIBLE' AS STATUS;"""
     else:
         conn = pymysql.connect(
@@ -44,6 +45,7 @@ CRITICAL MYSQL RULES:
 - Quote string literals with single quotes ('). Do not use double quotes.
 - Quote identifiers (tables/columns) with backticks (`), NOT double quotes.
 - Do not use PostgreSQL-specific syntax or functions.
+- If querying information_schema, you MUST filter by table_schema = DATABASE() to avoid returning internal system tables.
 If the question is completely unrelated to databases or the schema, generate exactly: SELECT 'IMPOSSIBLE' AS STATUS;"""
 
     response = client.models.generate_content(
@@ -77,5 +79,4 @@ If the question is completely unrelated to databases or the schema, generate exa
     conn.close()
 
 if __name__ == "__main__":
-    test_db_chat("mysql", "count number of tables with more than 2 columns")
-    test_db_chat("postgres", "count number of tables with more than 2 columns")
+    test_db_chat("mysql", "give me names of columns which have datatype as boolean")
