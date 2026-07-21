@@ -51,9 +51,26 @@ def main():
     print(f"Loading model from {model_path}...")
     pipeline = joblib.load(model_path)
     
-    # Predict
+    import re
+    # Predict using the same logic as main.py (Keyword Guard + ML Fallback)
+    INTENT_GUARD_KEYWORDS = [r"\bdb\b", r"\bdatabase\b", r"\btable\b", r"\bschema\b", r"\bcolumn\b", r"\bdata\b", r"\bsql\b"]
+    WRITE_VERBS = ["delete", "drop", "create", "insert", "update", "remove", "rename", "truncate", "assign", "set", "replace", "archive", "restore", "fill", "make"]
+    CASUAL_PHRASES = ["explain", "suggest", "how to", "what is a ", "help me", "change the table"]
+    
+    y_pred = []
     y_true = df["label"]
-    y_pred = pipeline.predict(df["text"])
+    for text in df["text"]:
+        msg_lower = text.lower()
+        has_kw = any(re.search(pattern, msg_lower) for pattern in INTENT_GUARD_KEYWORDS)
+        has_write = any(wv in msg_lower for wv in WRITE_VERBS)
+        has_casual = any(cp in msg_lower for cp in CASUAL_PHRASES)
+        
+        if has_kw and not has_write and not has_casual:
+            y_pred.append("read")
+        else:
+            y_pred.append(pipeline.predict([text])[0])
+            
+    y_pred = pd.Series(y_pred, index=df.index)
     
     # Metrics
     acc = accuracy_score(y_true, y_pred)

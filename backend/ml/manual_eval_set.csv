@@ -79,3 +79,6 @@ text,label
 "replace every NULL phone number with 'Unknown'","write"
 "let's just chat for a while","casual"
 "show me the latest payment received","read"
+"tell me about my db","read"
+"tell me about my database","read"
+"what's in my db","read"

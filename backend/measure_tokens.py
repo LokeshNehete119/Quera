@@ -50,7 +50,10 @@ def main_func():
         "which item never got reviewed",
         "who signed up but never ordered anything",
         "what's low in stock at our storage sites",
-        "Show me the status of the people"
+        "Show me the status of the people",
+        "tell me about my db",
+        "tell me about my database",
+        "what's in my db"
     ]
     
     all_reductions = []

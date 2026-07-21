@@ -37,7 +37,11 @@ SCHEMA_RETRIEVAL_MARGIN = 0.30
 
 SCHEMA_BROAD_INTENT_KEYWORDS = [
     "everything", 
-    "all data", 
+    "all data",
+    "my db",
+    "my database",
+    "what's in",
+    "tell me about",
     "entire database", 
     "summarize", 
     "overview"
@@ -817,17 +821,30 @@ def chat_endpoint(req: ChatMessageRequest, request: Request, user_id: str = Depe
         
     save_message(app_conn, chat_id, 'user', req.message)
 
+    INTENT_GUARD_KEYWORDS = [r"\bdb\b", r"\bdatabase\b", r"\btable\b", r"\bschema\b", r"\bcolumn\b", r"\bdata\b", r"\bsql\b"]
+    WRITE_VERBS = ["delete", "drop", "create", "insert", "update", "remove", "rename", "truncate", "assign", "set", "replace", "archive", "restore", "fill", "make"]
+    CASUAL_PHRASES = ["explain", "suggest", "how to", "what is a ", "help me", "change the table"]
+    
     try:
         client = genai.Client(api_key=api_key)
         
-        # Local ML Classification
-        t0 = time.time()
-        predicted_labels = ml_classifier.predict([req.message])
-        category = predicted_labels[0]
-        t1 = time.time()
+        msg_lower = req.message.lower()
+        has_kw = any(re.search(pattern, msg_lower) for pattern in INTENT_GUARD_KEYWORDS)
+        has_write = any(wv in msg_lower for wv in WRITE_VERBS)
+        has_casual = any(cp in msg_lower for cp in CASUAL_PHRASES)
         
-        print(f"[TIMING] Local ML Classification took {t1 - t0:.4f} seconds")
-        print(f"[INTENT CLASSIFIER] Message: '{req.message}' -> Predicted Category: {category} (Source: Local ML)")
+        if has_kw and not has_write and not has_casual:
+            category = "read"
+            print(f"[INTENT CLASSIFIER] Message: '{req.message}' -> Forced Category: {category} (Source: Keyword Guard)")
+        else:
+            # Local ML Classification
+            t0 = time.time()
+            predicted_labels = ml_classifier.predict([req.message])
+            category = predicted_labels[0]
+            t1 = time.time()
+            
+            print(f"[TIMING] Local ML Classification took {t1 - t0:.4f} seconds")
+            print(f"[INTENT CLASSIFIER] Message: '{req.message}' -> Predicted Category: {category} (Source: Local ML)")
         
         if category == "casual":
             casual_prompt = f"The user said: {req.message}\nProvide a friendly, conversational reply as an AI assistant."
