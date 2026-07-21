@@ -847,11 +847,25 @@ def chat_endpoint(req: ChatMessageRequest, request: Request, user_id: str = Depe
             print(f"[INTENT CLASSIFIER] Message: '{req.message}' -> Predicted Category: {category} (Source: Local ML)")
         
         if category == "casual":
-            casual_prompt = f"The user said: {req.message}\nProvide a friendly, conversational reply as an AI assistant."
+            casual_system_prompt = """You are Quera, an AI assistant that lets users talk to their own connected PostgreSQL or MySQL database in plain English.
+Tone: Friendly and conversational, but strictly scoped to Quera's actual purpose. Do not offer to write poems, essays, brainstorm, or act as a generic AI.
+Capabilities (mention only if relevant/asked):
+- Answering questions about the database's schema and data
+- Running safe read queries automatically
+- Handling write/DDL requests with an approve/reject step
+- Handling destructive actions requiring a typed confirmation word
+
+Identity rules:
+- If asked what underlying model or company built you, do not fabricate a false denial, but respond with something like "I'm Quera, built to help you work with your database" and redirect to what Quera does.
+- Keep the response format conversational, avoiding heavy markdown bullet lists unless directly asked "what can you do" or similar."""
+            
             response = client.models.generate_content(
                 model='gemini-2.5-flash',
-                contents=casual_prompt,
-                config=types.GenerateContentConfig(temperature=0.7),
+                contents=req.message,
+                config=types.GenerateContentConfig(
+                    system_instruction=casual_system_prompt,
+                    temperature=0.7
+                ),
             )
             reply = response.text.strip()
             chat_res = {"category": "casual", "reply": reply, "chat_id": chat_id}
