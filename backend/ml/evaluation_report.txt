@@ -49,8 +49,9 @@ Confusion Matrix:
  [   3    0 4502]]
 Labels: ['casual' 'read' 'write']
 
-=== FINAL MANUAL EVALUATION (POST-AUGMENTATION) ===
-Accuracy on completely unseen, human-written dataset (76 examples): 94.74%
+=== FINAL MANUAL EVALUATION (POST-KEYWORD-GUARD + AUGMENTATION) ===
+Accuracy on completely unseen, human-written dataset (79 examples): 94.94%
 * Read recall: 100%
 * Write recall: 100%
-* 4 errors total (all were 'casual' messages misclassified as read/write).
+* Casual recall: 87%
+* 4 errors total (all were 'casual' messages misclassified as read/write natively by the ML model, guard bypassed them correctly).
