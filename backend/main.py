@@ -860,7 +860,7 @@ Identity rules:
 - Keep the response format conversational, avoiding heavy markdown bullet lists unless directly asked "what can you do" or similar."""
             
             response = client.models.generate_content(
-                model='gemini-2.5-flash',
+                model='gemini-3.5-flash',
                 contents=req.message,
                 config=types.GenerateContentConfig(
                     system_instruction=casual_system_prompt,
@@ -911,7 +911,7 @@ If the question is completely unrelated to databases or the schema, generate exa
             
             t0 = time.time()
             sql_response = client.models.generate_content(
-                model='gemini-2.5-flash',
+                model='gemini-3.5-flash',
                 contents=req.message,
                 config=types.GenerateContentConfig(
                     response_mime_type="application/json",
@@ -975,7 +975,7 @@ CRITICAL: If the results contain multiple rows, do NOT generate a markdown table
             nl_prompt = f"User Question: {req.message}\nSQL Query: {raw_sql}\nColumns: {columns}\nResults: {results}"
             t0 = time.time()
             nl_response = client.models.generate_content(
-                model='gemini-2.5-flash',
+                model='gemini-3.5-flash',
                 contents=nl_prompt,
                 config=types.GenerateContentConfig(
                     system_instruction=nl_instruct,
@@ -1015,7 +1015,7 @@ If the question is impossible to answer from this schema and doesn't relate to s
 """
             t0 = time.time()
             sql_response = client.models.generate_content(
-                model='gemini-2.5-flash',
+                model='gemini-3.5-flash',
                 contents=req.message,
                 config=types.GenerateContentConfig(
                     response_mime_type="application/json",
